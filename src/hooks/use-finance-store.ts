@@ -60,7 +60,7 @@ interface FinanceState {
     secondPaymentDay?: number;
     startDate: string;
   }) => Promise<boolean>;
-  makeLoanPayment: (loanId: string, accountId: string, amount: number) => Promise<boolean>;
+  makeLoanPayment: (loanId: string, accountId: string, amount: number, lateCharge?: number, comment?: string) => Promise<boolean>;
   
   setTimeFilter: (filter: TimeFilter) => void;
   setCustomDateRange: (range: DateRange) => void;
@@ -74,7 +74,7 @@ export const useFinanceStore = create<FinanceState>((set) => ({
   bills: [],
   loans: [],
   loading: true,
-  timeFilter: '30d',
+  timeFilter: 'all',
   customDateRange: { from: null, to: null },
 
   fetchUser: async () => {
@@ -215,8 +215,8 @@ export const useFinanceStore = create<FinanceState>((set) => ({
     return false;
   },
 
-  makeLoanPayment: async (loanId, accountId, amount) => {
-    const tx = await db.makeLoanPayment(loanId, accountId, amount);
+  makeLoanPayment: async (loanId, accountId, amount, lateCharge, comment) => {
+    const tx = await db.makeLoanPayment(loanId, accountId, amount, lateCharge, comment);
     if (tx) {
       const [accs, txs, loansList] = await Promise.all([
         db.getAccounts(),

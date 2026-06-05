@@ -179,3 +179,9 @@
     @apply font-sans;
   }
 }
+
+/* Fix Recharts wrapper stacking context so tooltips stack above absolute center labels */
+.recharts-wrapper {
+  z-index: 10;
+  position: relative;
+}

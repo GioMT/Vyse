@@ -17,7 +17,8 @@ import {
   RefreshCw,
   User,
   Menu,
-  X
+  X,
+  Wallet
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -50,6 +51,7 @@ export default function Sidebar() {
     { name: 'Transactions', href: '/dashboard/transactions', icon: Receipt },
     { name: 'Recurring Bills', href: '/dashboard/bills', icon: CalendarDays },
     { name: 'Loans Tracker', href: '/dashboard/loans', icon: PiggyBank },
+    { name: 'Linked Accounts', href: '/dashboard/accounts', icon: Wallet },
   ];
 
   return (

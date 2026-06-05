@@ -13,7 +13,8 @@ import {
   Plus, 
   TrendingDown, 
   CheckCircle,
-  CircleDollarSign
+  CircleDollarSign,
+  Info
 } from 'lucide-react';
 
 // Helper functions for next payment schedule calculations
@@ -396,14 +397,29 @@ export default function LoansPage() {
                     placeholder="0.00"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="pl-7 bg-neutral-950 border-neutral-800 text-xs focus:border-indigo-500 text-neutral-100 rounded-lg h-9.5"
+                    disabled
+                    className="pl-7 bg-neutral-950 border-neutral-800 text-xs focus:border-indigo-500 text-neutral-100 rounded-lg h-9.5 disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* Include Additional Charge Toggle */}
               <div className="flex items-center justify-between py-1">
-                <span className="text-xs font-semibold text-neutral-500">Include Additional Charges</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-neutral-500">Include Additional Charges</span>
+                  <div className="relative group flex items-center">
+                    <div className="text-neutral-550 hover:text-neutral-350 cursor-help transition-colors">
+                      <Info className="h-3.5 w-3.5" />
+                    </div>
+                    {/* Tooltip content */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-neutral-950 border border-neutral-850 p-2.5 rounded-xl text-[11px] leading-normal font-medium text-neutral-300 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none shadow-xl z-50 text-center">
+                      Include extra costs like late fees, handling charges, or processing fees if applicable. These will be added as expenses without reducing your remaining loan principal.
+                      {/* Tooltip arrow */}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-neutral-950"></div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[5px] border-4 border-transparent border-t-neutral-850 -z-10"></div>
+                    </div>
+                  </div>
+                </div>
                 <label className="relative inline-flex items-center cursor-pointer select-none">
                   <input
                     type="checkbox"

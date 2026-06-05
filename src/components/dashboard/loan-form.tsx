@@ -97,7 +97,7 @@ export default function LoanForm({ onSuccess }: LoanFormProps) {
   };
 
   return (
-    <DialogContent className="sm:max-w-md bg-neutral-900 border border-neutral-850 text-neutral-100 p-6">
+    <DialogContent className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
       <DialogHeader>
         <DialogTitle className="text-lg font-bold text-neutral-100">Add Loan Liability</DialogTitle>
         <DialogDescription className="text-xs text-neutral-500">

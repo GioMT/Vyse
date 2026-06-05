@@ -38,7 +38,7 @@ interface CustomTooltipProps {
 const CustomBarTooltip = ({ active, payload }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-neutral-900 border border-neutral-850 p-3 rounded-xl shadow-xl backdrop-blur-md">
+      <div className="bg-popover border border-neutral-850 p-3 rounded-xl shadow-2xl z-50">
         <p className="text-xs font-semibold text-neutral-500 mb-1">{payload[0].payload.label}</p>
         <p className="text-sm font-semibold text-emerald-600">
           Inflow: ${payload[0].value.toLocaleString()}
@@ -55,7 +55,7 @@ const CustomBarTooltip = ({ active, payload }: CustomTooltipProps) => {
 const CustomDonutTooltip = ({ active, payload }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-neutral-900 border border-neutral-850 p-3 rounded-xl shadow-xl backdrop-blur-md">
+      <div className="bg-popover border border-neutral-850 p-3 rounded-xl shadow-2xl z-50">
         <p className="text-xs font-semibold text-neutral-100 mb-0.5">{payload[0].name}</p>
         <p className="text-sm font-extrabold" style={{ color: payload[0].payload.color }}>
           ${payload[0].value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -87,9 +87,9 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
   // Group transactions by date
   const txByDate: { [date: string]: { income: number; expense: number } } = {};
 
-  // Find last 7 days range if small, else sort chronologically
   filteredTransactions.forEach(tx => {
-    const dateStr = tx.date; // YYYY-MM-DD
+    // Extract date portion YYYY-MM-DD if date has time component (e.g. from getPastDate)
+    const dateStr = tx.date.split('T')[0];
     if (!txByDate[dateStr]) {
       txByDate[dateStr] = { income: 0, expense: 0 };
     }
@@ -105,8 +105,10 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
       // Format YYYY-MM-DD to Mon DD
       let label = date;
       try {
-        const d = new Date(date + 'T00:00:00');
-        label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        const d = new Date(date + 'T00:00:00Z');
+        if (!isNaN(d.getTime())) {
+          label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        }
       } catch {
         // Fallback
       }
@@ -119,7 +121,28 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // --- 2. Prepare Donut Chart Data (Expense breakdown by category) ---
+  // --- 2. Prepare Donut Chart Data (Inflow and Outflow breakdown by category) ---
+  const incomeByCategory: { [catId: string]: number } = {};
+  filteredTransactions
+    .filter(tx => tx.type === 'income')
+    .forEach(tx => {
+      if (!incomeByCategory[tx.category_id]) {
+        incomeByCategory[tx.category_id] = 0;
+      }
+      incomeByCategory[tx.category_id] += tx.amount;
+    });
+
+  const inflowDonutData = Object.entries(incomeByCategory).map(([catId, amount]) => {
+    const cat = categories.find(c => c.id === catId);
+    const catName = cat ? cat.name : 'Other Income';
+    const rawColor = cat ? cat.color : 'indigo';
+    return {
+      name: catName,
+      value: parseFloat(amount.toFixed(2)),
+      color: CATEGORY_HEX_COLORS[rawColor] || '#6366f1'
+    };
+  });
+
   const expenseByCategory: { [catId: string]: number } = {};
   filteredTransactions
     .filter(tx => tx.type === 'expense')
@@ -130,9 +153,7 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
       expenseByCategory[tx.category_id] += tx.amount;
     });
 
-
-
-  const donutData = Object.entries(expenseByCategory).map(([catId, amount]) => {
+  const outflowDonutData = Object.entries(expenseByCategory).map(([catId, amount]) => {
     const cat = categories.find(c => c.id === catId);
     const catName = cat ? cat.name : 'Other Expense';
     const rawColor = cat ? cat.color : 'zinc';
@@ -143,21 +164,20 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
     };
   });
 
-
-
   const hasBarData = barData.length > 0;
-  const hasDonutData = donutData.length > 0;
+  const hasInflowDonutData = inflowDonutData.length > 0;
+  const hasOutflowDonutData = outflowDonutData.length > 0;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Income vs Expenses Column */}
-      <div className="lg:col-span-2 rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col justify-between shadow-lg">
+      <div className="lg:col-span-2 rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col shadow-lg">
         <div>
           <h3 className="text-sm font-bold text-neutral-100">Income vs Expenses</h3>
-          <p className="text-xs text-neutral-500 mt-0.5">Visualizing cash inflows against outflows</p>
+          <p className="text-xs text-neutral-550 mt-0.5">Visualizing cash inflows against outflows</p>
         </div>
 
-        <div className="h-64 mt-6 w-full flex items-center justify-center">
+        <div className="flex-1 min-h-[300px] lg:min-h-[360px] mt-6 w-full flex items-center justify-center relative">
           {hasBarData ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -176,7 +196,7 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
                   axisLine={false}
                   tickFormatter={(val) => `$${val}`}
                 />
-                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'var(--color-neutral-850)', opacity: 0.3 }} />
+                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'var(--color-neutral-850)', opacity: 0.3 }} wrapperStyle={{ zIndex: 50 }} />
                 <Legend 
                   verticalAlign="top" 
                   height={36} 
@@ -198,47 +218,140 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
       </div>
 
       {/* Category Breakdown Column */}
-      <div className="rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col justify-between shadow-lg">
+      <div className="rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col shadow-lg">
         <div>
           <h3 className="text-sm font-bold text-neutral-100">Category Distributions</h3>
-          <p className="text-xs text-neutral-500 mt-0.5">Where your expenses are going</p>
+          <p className="text-xs text-neutral-500 mt-0.5">Where your cash flow is allocated</p>
         </div>
+ 
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-8 mt-6 w-full min-w-0 content-start">
+          {/* Inflow Donut */}
+          <div className="w-full flex flex-col items-center justify-start gap-4 min-w-0" style={{ minWidth: 0 }}>
+            {hasInflowDonutData ? (
+              <>
+                {/* Donut Chart wrapper */}
+                <div className="h-40 md:h-44 w-full relative flex items-center justify-center shrink-0 min-w-0" style={{ minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Tooltip content={<CustomDonutTooltip />} wrapperStyle={{ zIndex: 50 }} />
+                      <Pie
+                        data={inflowDonutData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="70%"
+                        outerRadius="90%"
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {inflowDonutData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Inner Circle metrics summaries */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[9px] uppercase tracking-wider font-semibold text-neutral-500">Inflow</span>
+                    <span className="text-sm md:text-base font-extrabold text-neutral-100 mt-0.5">
+                      ${inflowDonutData.reduce((sum, item) => sum + item.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                </div>
 
-        <div className="h-64 mt-6 w-full flex items-center justify-center relative">
-          {hasDonutData ? (
-            <>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Tooltip content={<CustomDonutTooltip />} />
-                  <Pie
-                    data={donutData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={65}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {donutData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Inner Circle metrics summaries */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-2">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-neutral-500">Total Outflow</span>
-                <span className="text-xl font-extrabold text-neutral-100">
-                  ${donutData.reduce((sum, item) => sum + item.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </span>
+                {/* Legend list */}
+                <div className="w-full flex flex-col justify-start gap-1.5 text-[10px] md:text-[11px] font-semibold text-neutral-350 pr-1 select-none items-center">
+                  <div className="flex flex-col items-start gap-1.5 w-full max-w-[160px] sm:max-w-[180px] mx-auto">
+                    {inflowDonutData
+                      .sort((a, b) => b.value - a.value) // Sort by highest value first
+                      .map((item, index) => {
+                        const total = inflowDonutData.reduce((sum, d) => sum + d.value, 0);
+                        const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                        return (
+                          <div key={index} className="flex items-center justify-between w-full gap-3 shrink-0">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span 
+                                className="h-1.5 w-1.5 rounded-full shrink-0" 
+                                style={{ backgroundColor: item.color }} 
+                              />
+                              <span className="truncate text-neutral-400 font-medium" title={item.name}>{item.name}</span>
+                            </div>
+                            <span className="text-neutral-100 font-bold shrink-0">{pct}%</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full text-center text-[10px] text-neutral-550 flex flex-col gap-1 items-center justify-center p-2">
+                <span>No income records.</span>
               </div>
-            </>
-          ) : (
-            <div className="text-center text-xs text-neutral-500 flex flex-col gap-1 items-center justify-center">
-              <span>No expense records.</span>
-              <span className="text-[10px] text-neutral-600">Add an expense transaction to populate.</span>
-            </div>
-          )}
+            )}
+          </div>
+ 
+          {/* Outflow Donut */}
+          <div className="w-full flex flex-col items-center justify-start gap-4 min-w-0" style={{ minWidth: 0 }}>
+            {hasOutflowDonutData ? (
+              <>
+                {/* Donut Chart wrapper */}
+                <div className="h-40 md:h-44 w-full relative flex items-center justify-center shrink-0 min-w-0" style={{ minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Tooltip content={<CustomDonutTooltip />} wrapperStyle={{ zIndex: 50 }} />
+                      <Pie
+                        data={outflowDonutData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="70%"
+                        outerRadius="90%"
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {outflowDonutData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Inner Circle metrics summaries */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[9px] uppercase tracking-wider font-semibold text-neutral-500">Outflow</span>
+                    <span className="text-sm md:text-base font-extrabold text-neutral-100 mt-0.5">
+                      ${outflowDonutData.reduce((sum, item) => sum + item.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Legend list */}
+                <div className="w-full flex flex-col justify-start gap-1.5 text-[10px] md:text-[11px] font-semibold text-neutral-350 pr-1 select-none items-center">
+                  <div className="flex flex-col items-start gap-1.5 w-full max-w-[160px] sm:max-w-[180px] mx-auto">
+                    {outflowDonutData
+                      .sort((a, b) => b.value - a.value) // Sort by highest value first
+                      .map((item, index) => {
+                        const total = outflowDonutData.reduce((sum, d) => sum + d.value, 0);
+                        const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                        return (
+                          <div key={index} className="flex items-center justify-between w-full gap-3 shrink-0">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span 
+                                className="h-1.5 w-1.5 rounded-full shrink-0" 
+                                style={{ backgroundColor: item.color }} 
+                              />
+                              <span className="truncate text-neutral-400 font-medium" title={item.name}>{item.name}</span>
+                            </div>
+                            <span className="text-neutral-100 font-bold shrink-0">{pct}%</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full text-center text-[10px] text-neutral-550 flex flex-col gap-1 items-center justify-center p-2">
+                <span>No expense records.</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -486,9 +486,9 @@ export const db = {
     return data;
   },
 
-  async makeLoanPayment(loanId: string, accountId: string, amount: number): Promise<Transaction | null> {
+  async makeLoanPayment(loanId: string, accountId: string, amount: number, lateCharge?: number, comment?: string): Promise<Transaction | null> {
     if (isDemoMode()) {
-      return MockDatabase.makeLoanPayment(loanId, accountId, amount);
+      return MockDatabase.makeLoanPayment(loanId, accountId, amount, lateCharge, comment);
     }
     if (!supabase) return null;
 
@@ -501,7 +501,7 @@ export const db = {
 
     const tx = await this.createTransaction({
       accountId,
-      categoryId: 'cat-exp-other', // default category
+      categoryId: 'cat-exp-utilities',
       amount: actualPayAmount,
       type: 'expense',
       description: `Loan Payment: ${loan.name}`,
@@ -521,6 +521,18 @@ export const db = {
 
     if (error) {
       console.error('Error updating loan balance:', error.message);
+    }
+
+    // Create separate transaction for late charges if applicable
+    if (lateCharge && lateCharge > 0) {
+      await this.createTransaction({
+        accountId,
+        categoryId: 'cat-exp-other',
+        amount: lateCharge,
+        type: 'expense',
+        description: `Loan Additional Charge (${comment || 'Late Fee/Processing'}): ${loan.name}`,
+        date: new Date().toISOString().split('T')[0]
+      });
     }
 
     return tx;

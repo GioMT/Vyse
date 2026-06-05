@@ -507,7 +507,7 @@ export class MockDatabase {
     return newLoan;
   }
 
-  static makeLoanPayment(loanId: string, accountId: string, amount: number): Transaction | null {
+  static makeLoanPayment(loanId: string, accountId: string, amount: number, lateCharge?: number, comment?: string): Transaction | null {
     const loans = this.getLoans();
     const idx = loans.findIndex(l => l.id === loanId);
     if (idx === -1) return null;
@@ -530,6 +530,18 @@ export class MockDatabase {
     loans[idx].remaining_balance = parseFloat((loan.remaining_balance - actualPayAmount).toFixed(2));
     loans[idx].paid_amount = parseFloat((loan.paid_amount + actualPayAmount).toFixed(2));
     this.saveLoans(loans);
+
+    // Create separate transaction for late charges if applicable
+    if (lateCharge && lateCharge > 0) {
+      this.createTransaction({
+        accountId,
+        categoryId: 'cat-exp-other',
+        amount: lateCharge,
+        type: 'expense',
+        description: `Loan Additional Charge (${comment || 'Late Fee/Processing'}): ${loan.name}`,
+        date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+      });
+    }
 
     return tx;
   }

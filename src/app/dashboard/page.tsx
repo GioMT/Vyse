@@ -6,7 +6,7 @@ import StatsCards from '@/components/dashboard/stats-cards';
 import Charts from '@/components/dashboard/charts';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import TransactionForm from '@/components/dashboard/transaction-form';
-import AccountForm from '@/components/dashboard/account-form';
+// import AccountForm from '@/components/dashboard/account-form';
 import { formatCurrency } from '@/lib/format';
 import { ACCOUNT_COLOR_CLASSES, CATEGORY_COLOR_CLASSES } from '@/lib/constants';
 import { 
@@ -31,7 +31,7 @@ export default function DashboardHome() {
   } = useFinanceStore();
 
   const [txDialogOpen, setTxDialogOpen] = useState(false);
-  const [accDialogOpen, setAccDialogOpen] = useState(false);
+  // const [accDialogOpen, setAccDialogOpen] = useState(false);
 
   // Time Filtering Helper
   const getFilteredTransactions = () => {
@@ -134,14 +134,14 @@ export default function DashboardHome() {
       {/* Visual Analytics Charts */}
       <Charts filteredTransactions={filteredTxs} categories={categories} />
 
-      {/* Grid: Recent Transactions & Bank Accounts */}
+      {/* Grid: Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Side: Recent Ledger */}
-        <div className="lg:col-span-8 rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col justify-between shadow-lg">
+        <div className="lg:col-span-12 rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col justify-between shadow-lg">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-neutral-300">Recent Transactions</h3>
-              <p className="text-xs text-neutral-500 mt-0.5">Quick overview of your latest cash flow actions</p>
+              <p className="text-xs text-neutral-550 mt-0.5">Quick overview of your latest cash flow actions</p>
             </div>
             
             {/* Add Transaction Dialog Button */}
@@ -219,62 +219,27 @@ export default function DashboardHome() {
             )}
           </div>
         </div>
-
-        {/* Right Side: Account Summaries */}
-        <div className="lg:col-span-4 rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col justify-between shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-neutral-100">Linked Accounts</h3>
-              <p className="text-xs text-neutral-500 mt-0.5">Asset & liability sheet</p>
-            </div>
-            
-            {/* Add Account Dialog Button */}
-            <Dialog open={accDialogOpen} onOpenChange={setAccDialogOpen}>
-              <DialogTrigger
-                render={
-                  <button className="h-8.5 w-8.5 rounded-lg border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 active:scale-95 text-neutral-400 hover:text-neutral-100 flex items-center justify-center cursor-pointer transition-all duration-150">
-                    <Plus className="h-4.5 w-4.5" />
-                  </button>
-                }
-              />
-              <AccountForm onSuccess={() => setAccDialogOpen(false)} />
-            </Dialog>
-          </div>
-
-          <div className="mt-6 flex flex-col gap-3">
-            {accounts.map((acc) => {
-              const borderClass = ACCOUNT_COLOR_CLASSES[acc.color] || 'border-neutral-800 text-neutral-400 bg-neutral-850/5';
-              return (
-                <div 
-                  key={acc.id} 
-                  className={`flex items-center justify-between p-4 rounded-xl border ${borderClass}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-neutral-950/60 flex items-center justify-center shrink-0 border border-neutral-800/40">
-                      {acc.type === 'checking' || acc.type === 'savings' ? (
-                        <Landmark className="h-4.5 w-4.5" />
-                      ) : acc.type === 'credit' ? (
-                        <CreditCard className="h-4.5 w-4.5" />
-                      ) : (
-                        <DollarSign className="h-4.5 w-4.5" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-xs text-neutral-100">{acc.name}</h4>
-                      <p className="text-[10px] capitalize text-neutral-500 mt-0.5">{acc.type} account</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-extrabold text-sm text-neutral-100">
-                      {formatCurrency(acc.balance)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
+
+      {/* 
+      ========================================================================
+      TEMPLATE SAVED: Add Account Form Dialog & Trigger (for future transfer)
+      ========================================================================
+      import AccountForm from '@/components/dashboard/account-form';
+      const [accDialogOpen, setAccDialogOpen] = useState(false);
+
+      <Dialog open={accDialogOpen} onOpenChange={setAccDialogOpen}>
+        <DialogTrigger
+          render={
+            <button className="h-8.5 w-8.5 rounded-lg border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 active:scale-95 text-neutral-400 hover:text-neutral-100 flex items-center justify-center cursor-pointer transition-all duration-150">
+              <Plus className="h-4.5 w-4.5" />
+            </button>
+          }
+        />
+        <AccountForm onSuccess={() => setAccDialogOpen(false)} />
+      </Dialog>
+      ========================================================================
+      */}
     </div>
   );
 }
