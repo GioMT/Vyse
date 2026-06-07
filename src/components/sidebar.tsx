@@ -181,13 +181,15 @@ export default function Sidebar() {
                   <UserCog className="h-4 w-4 text-indigo-400 shrink-0" />
                   <span>Account</span>
                 </button>
-                <button
-                  onClick={() => { setPasswordOpen(true); setShowProfileMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
-                >
-                  <Key className="h-4 w-4 text-indigo-400 shrink-0" />
-                  <span>Password</span>
-                </button>
+                {!user?.is_oauth && (
+                  <button
+                    onClick={() => { setPasswordOpen(true); setShowProfileMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
+                  >
+                    <Key className="h-4 w-4 text-indigo-400 shrink-0" />
+                    <span>Password</span>
+                  </button>
+                )}
                 <button
                   onClick={() => { setAppearanceOpen(true); setShowProfileMenu(false); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
@@ -340,13 +342,15 @@ export default function Sidebar() {
                   <UserCog className="h-4 w-4 text-indigo-400 shrink-0" />
                   <span>Account</span>
                 </button>
-                <button
-                  onClick={() => { setPasswordOpen(true); setShowProfileMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
-                >
-                  <Key className="h-4 w-4 text-indigo-400 shrink-0" />
-                  <span>Password</span>
-                </button>
+                {!user?.is_oauth && (
+                  <button
+                    onClick={() => { setPasswordOpen(true); setShowProfileMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
+                  >
+                    <Key className="h-4 w-4 text-indigo-400 shrink-0" />
+                    <span>Password</span>
+                  </button>
+                )}
                 <button
                   onClick={() => { setAppearanceOpen(true); setShowProfileMenu(false); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"

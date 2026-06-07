@@ -317,13 +317,19 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
                 <span className="text-sm font-bold text-neutral-200 truncate mt-0.5">{user?.email || 'demo@finance.io'}</span>
               </div>
               
-              <button
-                type="button"
-                onClick={handleStartEmailChange}
-                className="h-8 px-3.5 rounded-lg border border-neutral-800 hover:bg-neutral-850 text-indigo-400 hover:text-indigo-300 text-xs font-bold transition-all cursor-pointer shrink-0"
-              >
-                Change
-              </button>
+              {!user?.is_oauth ? (
+                <button
+                  type="button"
+                  onClick={handleStartEmailChange}
+                  className="h-8 px-3.5 rounded-lg border border-neutral-800 hover:bg-neutral-850 text-indigo-400 hover:text-indigo-300 text-xs font-bold transition-all cursor-pointer shrink-0"
+                >
+                  Change
+                </button>
+              ) : (
+                <span className="text-[11px] text-neutral-550 bg-neutral-900 border border-neutral-850 px-2 py-1 rounded font-semibold shrink-0 select-none">
+                  Google Account
+                </span>
+              )}
             </div>
           </div>
 

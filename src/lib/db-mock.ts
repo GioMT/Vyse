@@ -29,6 +29,7 @@ export interface Profile {
   sex?: string;
   onboarded?: boolean;
   currency?: string;
+  is_oauth?: boolean;
   created_at: string;
 }
 

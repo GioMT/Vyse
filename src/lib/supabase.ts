@@ -42,6 +42,10 @@ export const auth = {
       .eq('id', user.id)
       .single();
 
+    const isOAuth = user.app_metadata?.provider !== 'email' || 
+                    (user.identities && user.identities.some(id => id.provider !== 'email')) || 
+                    false;
+
     return {
       id: user.id,
       email: user.email || '',
@@ -50,6 +54,7 @@ export const auth = {
       dob: profile?.dob || user.user_metadata?.dob,
       sex: profile?.sex || user.user_metadata?.sex,
       onboarded: profile?.onboarded ?? user.user_metadata?.onboarded ?? false,
+      is_oauth: isOAuth,
       created_at: profile?.created_at || user.created_at
     };
   },
@@ -150,6 +155,7 @@ export const auth = {
         email: 'demo@finance.io',
         full_name: 'Alex Mercer',
         avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
+        is_oauth: true,
         created_at: new Date().toISOString()
       };
       MockDatabase.setSessionUser(mockUser);
