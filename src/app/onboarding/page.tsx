@@ -19,6 +19,39 @@ import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import AccountForm from '@/components/dashboard/account-form';
 import { ATMCard, PaperBill } from '@/app/dashboard/accounts/page';
 
+function getPasswordStrength(password: string): {
+  score: number;
+  label: string;
+  colorClass: string;
+  barColorClass: string;
+} {
+  if (!password) {
+    return { score: 0, label: 'Empty', colorClass: 'text-neutral-500', barColorClass: 'bg-neutral-800' };
+  }
+  
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+  if (/\d/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (password.length < 6) {
+    score = Math.min(score, 1);
+  }
+
+  switch (score) {
+    case 0:
+    case 1:
+      return { score: 1, label: 'Weak', colorClass: 'text-rose-500', barColorClass: 'bg-rose-500' };
+    case 2:
+    case 3:
+      return { score: 2, label: 'Moderate', colorClass: 'text-amber-500', barColorClass: 'bg-amber-500' };
+    case 4:
+    default:
+      return { score: 3, label: 'Strong', colorClass: 'text-emerald-400', barColorClass: 'bg-emerald-500' };
+  }
+}
+
 export default function OnboardingPage() {
   const { user, accounts, fetchUser, updateProfile } = useFinanceStore();
   const router = useRouter();
@@ -37,6 +70,7 @@ export default function OnboardingPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Dialog state for Account Form
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
@@ -136,6 +170,8 @@ export default function OnboardingPage() {
       setLoading(false);
     }
   };
+
+  const strength = getPasswordStrength(password);
 
   if (loading && step === 1) {
     return (
@@ -246,9 +282,9 @@ export default function OnboardingPage() {
                 {/* Names inline */}
                 <div className="grid grid-cols-2 gap-3 text-left">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-500">First Name</label>
+                    <label className="text-xs font-semibold text-neutral-500">First Name *</label>
                     <div className="relative">
-                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-550" />
+                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-555" />
                       <input
                         type="text"
                         placeholder="First name"
@@ -260,7 +296,7 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-500">Last Name</label>
+                    <label className="text-xs font-semibold text-neutral-500">Last Name *</label>
                     <input
                       type="text"
                       placeholder="Last name"
@@ -275,9 +311,9 @@ export default function OnboardingPage() {
                 {/* DOB & Sex inline */}
                 <div className="grid grid-cols-2 gap-3 text-left">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-500">Date of Birth</label>
+                    <label className="text-xs font-semibold text-neutral-500">Date of Birth *</label>
                     <div className="relative">
-                      <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-550" />
+                      <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-555" />
                       <input
                         type="date"
                         value={dob}
@@ -289,7 +325,7 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-500">Sex</label>
+                    <label className="text-xs font-semibold text-neutral-500">Sex *</label>
                     <select
                       value={sex}
                       onChange={(e) => setSex(e.target.value)}
@@ -305,7 +341,7 @@ export default function OnboardingPage() {
 
                 {/* Default Currency Selector */}
                 <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-semibold text-neutral-500">Default Currency</label>
+                  <label className="text-xs font-semibold text-neutral-500">Default Currency *</label>
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
@@ -325,7 +361,7 @@ export default function OnboardingPage() {
 
                 {/* Password Setup for OAuth users */}
                 {user?.is_oauth && (
-                  <div className="space-y-3 p-4 rounded-xl bg-neutral-950/40 border border-neutral-850/50 animate-in fade-in duration-200">
+                  <div className="space-y-4 p-4 rounded-xl bg-neutral-955 border border-neutral-850/60 animate-in fade-in duration-200">
                     <div className="text-left space-y-1">
                       <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">Set Up Account Password</span>
                       <p className="text-[10px] text-neutral-500 leading-normal">
@@ -333,35 +369,78 @@ export default function OnboardingPage() {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 text-left">
+                    <div className="space-y-4 text-left">
+                      {/* Password input (Row 1) */}
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-neutral-500">Password</label>
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Min. 6 chars"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                          className="h-10.5 w-full px-3.5 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
-                        />
+                        <div className="flex justify-between items-center">
+                          <label className="text-xs font-semibold text-neutral-500">Password *</label>
+                          {password && (
+                            <span className={`text-[10px] font-bold ${strength.colorClass} animate-in fade-in duration-150`}>
+                              {strength.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Min. 6 characters"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            className="h-10.5 w-full px-3.5 pr-12 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 hover:text-neutral-350 font-bold tracking-wide transition-colors uppercase select-none cursor-pointer"
+                          >
+                            {showPassword ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                        {password && (
+                          <div className="grid grid-cols-3 gap-1 h-1.5 mt-1.5 animate-in fade-in duration-200">
+                            <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 1 ? strength.barColorClass : 'bg-neutral-800'}`} />
+                            <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 2 ? strength.barColorClass : 'bg-neutral-800'}`} />
+                            <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 3 ? strength.barColorClass : 'bg-neutral-800'}`} />
+                          </div>
+                        )}
                       </div>
-                      <div className="space-y-1.5 font-sans relative">
-                        <label className="text-xs font-semibold text-neutral-500">Confirm Password</label>
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Confirm"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          required
-                          className="h-10.5 w-full px-3.5 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3.5 top-[38px] text-[10px] text-neutral-500 hover:text-neutral-350 font-bold tracking-wide transition-colors uppercase select-none cursor-pointer"
-                        >
-                          {showPassword ? 'Hide' : 'Show'}
-                        </button>
+
+                      {/* Confirm Password input (Row 2) */}
+                      <div className="space-y-1.5 relative">
+                        <label className="text-xs font-semibold text-neutral-500 block">Confirm Password *</label>
+                        <div className="relative">
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            placeholder="Confirm password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            required
+                            className="h-10.5 w-full px-3.5 pr-12 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 hover:text-neutral-350 font-bold tracking-wide transition-colors uppercase select-none cursor-pointer"
+                          >
+                            {showConfirmPassword ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                        {confirmPassword && (
+                          <div className="flex items-center gap-1.5 pt-0.5 text-[10px] animate-in fade-in duration-200">
+                            {password === confirmPassword ? (
+                              <>
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                                <span className="text-emerald-400 font-medium">Passwords match</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                                <span className="text-rose-450 font-medium">Passwords do not match</span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
