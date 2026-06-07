@@ -53,7 +53,7 @@ function getPasswordStrength(password: string): {
 }
 
 export default function OnboardingPage() {
-  const { user, accounts, fetchUser, updateProfile } = useFinanceStore();
+  const { user, accounts, fetchUser, fetchData, updateProfile } = useFinanceStore();
   const router = useRouter();
   
   const [loading, setLoading] = useState(true);
@@ -76,6 +76,19 @@ export default function OnboardingPage() {
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
+  const changeStep = (newStep: 1 | 2 | 3) => {
+    setStep(newStep);
+    localStorage.setItem('vyse_onboarding_step', String(newStep));
+  };
+
+  // Restore password from sessionStorage on mount
+  useEffect(() => {
+    const savedPassword = sessionStorage.getItem('vyse_onboarding_pwd');
+    const savedConfirmPassword = sessionStorage.getItem('vyse_onboarding_confirm_pwd');
+    if (savedPassword) setPassword(savedPassword);
+    if (savedConfirmPassword) setConfirmPassword(savedConfirmPassword);
+  }, []);
+
   useEffect(() => {
     fetchUser().then((currentUser) => {
       if (!currentUser) {
@@ -91,10 +104,23 @@ export default function OnboardingPage() {
         setSex(currentUser.sex || '');
         setEmail(currentUser.email || '');
         setCurrency(currentUser.currency || 'PHP');
-        setLoading(false);
+
+        // Check if there is a saved step
+        const savedStep = localStorage.getItem('vyse_onboarding_step');
+        if (savedStep) {
+          const parsed = parseInt(savedStep, 10);
+          if (parsed === 1 || parsed === 2 || parsed === 3) {
+            setStep(parsed as 1 | 2 | 3);
+          }
+        }
+
+        // Fetch accounts and other financial data for onboarding page
+        fetchData().then(() => {
+          setLoading(false);
+        });
       }
     });
-  }, [fetchUser, router]);
+  }, [fetchUser, fetchData, router]);
 
   const handlePhase1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,9 +148,10 @@ export default function OnboardingPage() {
     setError(null);
     try {
       const combinedName = `${firstName} ${lastName}`.trim();
-      const res = await updateProfile(combinedName, dob, sex, false, currency, user?.is_oauth ? password : undefined);
+      // Defer password saving to the finalization stage to prevent "password must be different" errors on reload
+      const res = await updateProfile(combinedName, dob, sex, false, currency);
       if (res.success) {
-        setStep(2);
+        changeStep(2);
       } else {
         setError(res.error || 'Failed to update details.');
       }
@@ -142,7 +169,7 @@ export default function OnboardingPage() {
       return;
     }
     setError(null);
-    setStep(3);
+    changeStep(3);
   };
 
   const handleOnboardingFinalize = async (startTour: boolean) => {
@@ -150,8 +177,14 @@ export default function OnboardingPage() {
     setError(null);
     try {
       const combinedName = `${firstName} ${lastName}`.trim();
-      const res = await updateProfile(combinedName, dob, sex, true, currency);
+      // Retrieve password from sessionStorage if state was lost on refresh
+      const storedPwd = sessionStorage.getItem('vyse_onboarding_pwd') || password || undefined;
+      const res = await updateProfile(combinedName, dob, sex, true, currency, user?.is_oauth ? storedPwd : undefined);
       if (res.success) {
+        // Clear onboarding session storage
+        sessionStorage.removeItem('vyse_onboarding_pwd');
+        sessionStorage.removeItem('vyse_onboarding_confirm_pwd');
+        localStorage.removeItem('vyse_onboarding_step');
         if (startTour) {
           localStorage.setItem('vyse_tour_active', 'true');
           localStorage.setItem('vyse_initial_tour', 'true');
@@ -388,14 +421,17 @@ export default function OnboardingPage() {
                             type={showPassword ? "text" : "password"}
                             placeholder="Min. 6 characters"
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            onChange={(e) => {
+                              setPassword(e.target.value);
+                              sessionStorage.setItem('vyse_onboarding_pwd', e.target.value);
+                            }}
                             required
                             className="h-10.5 w-full px-3.5 pr-12 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
                           />
                           <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-500 hover:text-neutral-350 font-bold tracking-wide transition-colors uppercase select-none cursor-pointer"
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] text-neutral-555 hover:text-neutral-350 font-bold tracking-wide transition-colors uppercase select-none cursor-pointer"
                           >
                             {showPassword ? 'Hide' : 'Show'}
                           </button>
@@ -417,7 +453,10 @@ export default function OnboardingPage() {
                             type={showConfirmPassword ? "text" : "password"}
                             placeholder="Confirm password"
                             value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            onChange={(e) => {
+                              setConfirmPassword(e.target.value);
+                              sessionStorage.setItem('vyse_onboarding_confirm_pwd', e.target.value);
+                            }}
                             required
                             className="h-10.5 w-full px-3.5 pr-12 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
                           />
@@ -566,7 +605,7 @@ export default function OnboardingPage() {
             {/* Bottom Actions toolbar */}
             <div className="flex justify-between items-center max-w-4xl w-full border-t border-neutral-900 pt-6">
               <button
-                onClick={() => setStep(1)}
+                onClick={() => changeStep(1)}
                 className="h-10 px-4 rounded-xl border border-neutral-850 hover:bg-neutral-900 text-neutral-400 hover:text-neutral-200 text-xs font-bold transition-colors cursor-pointer"
               >
                 Back to Details
@@ -652,9 +691,9 @@ export default function OnboardingPage() {
 
               <div className="pt-2">
                 <button
-                  onClick={() => setStep(2)}
+                  onClick={() => changeStep(2)}
                   disabled={loading}
-                  className="text-xs text-neutral-500 hover:text-neutral-300 font-semibold transition-colors cursor-pointer"
+                  className="text-xs text-neutral-500 hover:text-neutral-350 font-semibold transition-colors cursor-pointer"
                 >
                   Back to Accounts
                 </button>
