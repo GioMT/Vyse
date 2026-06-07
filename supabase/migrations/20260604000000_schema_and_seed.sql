@@ -12,6 +12,10 @@ create table public.profiles (
   email text not null,
   full_name text,
   avatar_url text,
+  dob text,
+  sex text,
+  onboarded boolean default false,
+  currency text default 'PHP',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -23,6 +27,7 @@ create table public.accounts (
   type text not null check (type in ('checking', 'savings', 'credit', 'cash')),
   balance numeric(12,2) default 0.00 not null,
   color text not null,
+  account_number text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

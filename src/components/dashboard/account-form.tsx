@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { formatCurrency, getCurrencySymbol } from '@/lib/format';
 import { useConfirm } from '@/components/ui/confirmation-provider';
 import { Account, deobfuscate } from '@/lib/db-mock';
+import { AlertCircle } from 'lucide-react';
 
 const accountSchema = z.object({
   name: z.string().min(1, { message: 'Account name is required' }),
@@ -35,6 +36,7 @@ interface AccountFormProps {
 
 export default function AccountForm({ onSuccess, account }: AccountFormProps) {
   const { addAccount, updateAccount, isTourActive } = useFinanceStore();
+  const [error, setError] = React.useState<string | null>(null);
   const isEdit = !!account;
 
   const {
@@ -81,6 +83,7 @@ export default function AccountForm({ onSuccess, account }: AccountFormProps) {
 
   const onSubmit = async (values: AccountFormValues) => {
     try {
+      setError(null);
       const confirmed = await confirm({
         title: isEdit ? 'Confirm Save Changes' : 'Confirm New Account',
         message: isEdit 
@@ -113,9 +116,12 @@ export default function AccountForm({ onSuccess, account }: AccountFormProps) {
       if (success) {
         reset();
         onSuccess();
+      } else {
+        setError('Failed to save account. This can happen if the database schema is missing the account_number column. Please apply the migration or run the SQL command to add it.');
       }
     } catch (e) {
       console.error('Error submitting account form:', e);
+      setError('An unexpected error occurred while saving the account.');
     }
   };
 
@@ -133,6 +139,12 @@ export default function AccountForm({ onSuccess, account }: AccountFormProps) {
       </DialogHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-3">
+        {error && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-455 flex items-start gap-2 animate-in fade-in duration-200">
+            <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
         {/* Name Input */}
         <div className="space-y-1">
           <label className="text-xs font-semibold text-neutral-500">Account Name</label>
