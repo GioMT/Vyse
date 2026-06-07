@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { auth, db } from '@/lib/supabase';
+import { auth, db, isDemoMode, supabase } from '@/lib/supabase';
 import { 
   Profile, 
   Account, 
@@ -10,7 +10,9 @@ import {
   DEFAULT_ACCOUNTS,
   DEFAULT_TRANSACTIONS,
   DEFAULT_BILLS,
-  DEFAULT_LOANS
+  DEFAULT_LOANS,
+  MockDatabase,
+  BankConnection
 } from '@/lib/db-mock';
 
 interface DateRange {
@@ -89,6 +91,20 @@ interface FinanceState {
   
   setTimeFilter: (filter: TimeFilter) => void;
   setCustomDateRange: (range: DateRange) => void;
+  verifyCurrentPassword: (password: string) => Promise<boolean>;
+  updateUserEmail: (newEmail: string) => Promise<boolean>;
+  updateUserPassword: (newPassword: string) => Promise<boolean>;
+  sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Bank Link Actions
+  bankConnections: BankConnection[];
+  geminiKey: string;
+  loadingConnections: boolean;
+  linkBank: (institutionName: string, accounts: Array<{ name: string; balance: number; type: Account['type'] }>) => Promise<boolean>;
+  syncBank: (connectionId: string) => Promise<boolean>;
+  setGeminiKey: (key: string) => void;
+  categorizeWithAI: (txId: string) => Promise<boolean>;
+  autoCategorizeAll: () => Promise<void>;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => {
@@ -139,6 +155,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     loading: true,
     timeFilter: 'all',
     customDateRange: { from: null, to: null },
+    bankConnections: [],
+    geminiKey: typeof window !== 'undefined' ? localStorage.getItem('vyse_gemini_key') || '' : '',
+    loadingConnections: false,
 
     fetchUser: async () => {
       try {
@@ -227,7 +246,9 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
           db.getLoans()
         ]);
 
-        set({ categories: cats, loading: false });
+        const connections = MockDatabase.getBankConnections();
+
+        set({ categories: cats, bankConnections: connections, loading: false });
         updateStoreState({
           accounts: accs,
           transactions: txs,
@@ -245,6 +266,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     addAccount: async (name, type, initialBalance, color, accountNumber) => {
+      if (get().isTourActive) return true;
       const acc = await db.createAccount(name, type, initialBalance, color, accountNumber);
       if (acc) {
         updateStoreState({ accounts: [...get().realAccounts, acc] });
@@ -254,6 +276,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     updateAccount: async (id, name, type, balance, color, accountNumber) => {
+      if (get().isTourActive) return true;
       const success = await db.updateAccount(id, name, type, balance, color, accountNumber);
       if (success) {
         const accs = await db.getAccounts();
@@ -264,6 +287,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     addTransaction: async (data) => {
+      if (get().isTourActive) return true;
       if (data.type === 'transfer') {
         const timestamp = Date.now();
         const refId = `tx-tr-${timestamp}`;
@@ -336,6 +360,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     deleteTransaction: async (id) => {
+      if (get().isTourActive) return true;
       const state = get();
       const target = state.transactions.find(t => t.id === id);
       if (target) {
@@ -360,6 +385,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     addBill: async (data) => {
+      if (get().isTourActive) return true;
       const bill = await db.createBill(data);
       if (bill) {
         updateStoreState({ bills: [...get().realBills, bill] });
@@ -369,6 +395,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     payBill: async (billId, accountId) => {
+      if (get().isTourActive) return true;
       const tx = await db.payBill(billId, accountId);
       if (tx) {
         const [accs, txs, billsList] = await Promise.all([
@@ -383,6 +410,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     addLoan: async (data) => {
+      if (get().isTourActive) return true;
       const loan = await db.createLoan(data);
       if (loan) {
         updateStoreState({ loans: [...get().realLoans, loan] });
@@ -392,6 +420,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     makeLoanPayment: async (loanId, accountId, amount, lateCharge, comment) => {
+      if (get().isTourActive) return true;
       const tx = await db.makeLoanPayment(loanId, accountId, amount, lateCharge, comment);
       if (tx) {
         const [accs, txs, loansList] = await Promise.all([
@@ -406,6 +435,154 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     },
 
     setTimeFilter: (filter) => set({ timeFilter: filter }),
-    setCustomDateRange: (range) => set({ customDateRange: range })
+    setCustomDateRange: (range) => set({ customDateRange: range }),
+    
+    verifyCurrentPassword: async (password) => {
+      if (isDemoMode()) {
+        return MockDatabase.verifyCurrentPassword(password);
+      }
+      if (supabase) {
+        const user = get().user;
+        if (!user) return false;
+        const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
+        return !error;
+      }
+      return false;
+    },
+
+    updateUserEmail: async (newEmail) => {
+      if (isDemoMode()) {
+        const success = MockDatabase.updateEmail(newEmail);
+        if (success) {
+          set({ user: MockDatabase.getSessionUser() });
+          return true;
+        }
+        return false;
+      }
+      if (supabase) {
+        const { error } = await supabase.auth.updateUser({ email: newEmail });
+        if (error) return false;
+        return true;
+      }
+      return false;
+    },
+
+    updateUserPassword: async (newPassword) => {
+      if (isDemoMode()) {
+        return MockDatabase.updatePassword(newPassword);
+      }
+      if (supabase) {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        return !error;
+      }
+      return false;
+    },
+
+    sendPasswordResetEmail: async (email) => {
+      return await auth.resetPasswordForEmail(email);
+    },
+
+    linkBank: async (institutionName, accountsData) => {
+      const conn = MockDatabase.linkMockBankConnection(institutionName, accountsData);
+      if (conn) {
+        const conns = MockDatabase.getBankConnections();
+        const [accs, txs] = await Promise.all([db.getAccounts(), db.getTransactions()]);
+        set({ bankConnections: conns });
+        updateStoreState({ accounts: accs, transactions: txs });
+        return true;
+      }
+      return false;
+    },
+
+    syncBank: async (connectionId) => {
+      set({ loadingConnections: true });
+      try {
+        const count = await MockDatabase.syncMockBankConnection(connectionId);
+        const conns = MockDatabase.getBankConnections();
+        const [accs, txs] = await Promise.all([db.getAccounts(), db.getTransactions()]);
+        set({ bankConnections: conns, loadingConnections: false });
+        updateStoreState({ accounts: accs, transactions: txs });
+        
+        // Auto-categorize synced transaction if a Gemini key is present
+        if (count > 0 && txs.length > 0) {
+          const syncedTx = txs[0]; // the newly added transaction
+          const state = get();
+          if (state.geminiKey) {
+            await state.categorizeWithAI(syncedTx.id);
+          }
+        }
+        return true;
+      } catch (e) {
+        console.error(e);
+        set({ loadingConnections: false });
+        return false;
+      }
+    },
+
+    setGeminiKey: (key) => {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vyse_gemini_key', key);
+      }
+      set({ geminiKey: key });
+    },
+
+    categorizeWithAI: async (txId: string) => {
+      const state = get();
+      const tx = state.transactions.find(t => t.id === txId);
+      if (!tx) return false;
+
+      try {
+        const res = await fetch('/api/categorize', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            description: tx.description,
+            apiKey: state.geminiKey || undefined,
+          }),
+        });
+
+        if (!res.ok) return false;
+        const data = await res.json();
+        
+        // Find category by name
+        const match = state.categories.find(
+          c => c.name.toLowerCase() === data.category.toLowerCase()
+        );
+
+        if (match) {
+          const success = MockDatabase.updateTransactionCategory(txId, match.id, {
+            clean_merchant: data.cleanMerchantName,
+            confidence: data.confidence,
+            is_ai_categorized: true,
+            method: data.method,
+          });
+          if (success) {
+            const updatedTxs = await db.getTransactions();
+            updateStoreState({ transactions: updatedTxs });
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error('AI Categorization Error:', e);
+      }
+      return false;
+    },
+
+    autoCategorizeAll: async () => {
+      const state = get();
+      // Target transactions with "Other Expense" or "Other Income"
+      const targetTxs = state.transactions.filter(
+        t => t.category_id === 'cat-exp-other' || t.category_id === 'cat-inc-other'
+      );
+      
+      if (targetTxs.length === 0) return;
+
+      // Classify them sequentially to avoid rate-limiting on Gemini free tier
+      for (const tx of targetTxs) {
+        await state.categorizeWithAI(tx.id);
+      }
+    }
   };
 });

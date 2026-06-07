@@ -41,6 +41,8 @@ export interface Account {
   color: string; // HSL color or tailwind class for dashboard aesthetics
   account_number?: string;
   created_at: string;
+  connection_id?: string;
+  is_linked?: boolean;
 }
 
 export interface Category {
@@ -50,6 +52,17 @@ export interface Category {
   type: 'income' | 'expense';
   color: string; // Accent color
   icon: string; // Lucide icon name
+}
+
+export interface BankConnection {
+  id: string;
+  user_id: string;
+  institution_name: string;
+  logo_url?: string;
+  status: 'active' | 'error' | 'syncing';
+  last_synced_at: string;
+  accounts_count: number;
+  created_at: string;
 }
 
 export interface Transaction {
@@ -62,6 +75,12 @@ export interface Transaction {
   description: string;
   date: string; // YYYY-MM-DD
   created_at: string;
+  ai_metadata?: {
+    clean_merchant?: string;
+    confidence?: number;
+    is_ai_categorized?: boolean;
+    method?: 'simulated' | 'gemini';
+  };
 }
 
 export interface RecurringBill {
@@ -320,6 +339,53 @@ export class MockDatabase {
     };
     this.setSessionUser(updated);
     return updated;
+  }
+
+  static verifyCurrentPassword(password: string): boolean {
+    const user = this.getSessionUser();
+    if (!user) return false;
+    const users = this.getMockUsers();
+    const match = users.find(u => u.id === user.id);
+    return match ? match.password === password : false;
+  }
+
+  static updateEmail(newEmail: string): boolean {
+    const user = this.getSessionUser();
+    if (!user) return false;
+    
+    const users = this.getMockUsers();
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx !== -1) {
+      users[idx] = {
+        ...users[idx],
+        email: newEmail.toLowerCase().trim()
+      };
+      this.setStorageItem('pt_mock_users', users);
+    }
+    
+    const updated = {
+      ...user,
+      email: newEmail.toLowerCase().trim()
+    };
+    this.setSessionUser(updated);
+    return true;
+  }
+
+  static updatePassword(newPassword: string): boolean {
+    const user = this.getSessionUser();
+    if (!user) return false;
+    
+    const users = this.getMockUsers();
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx !== -1) {
+      users[idx] = {
+        ...users[idx],
+        password: newPassword
+      };
+      this.setStorageItem('pt_mock_users', users);
+      return true;
+    }
+    return false;
   }
 
   private static initUserStores(userId: string) {
@@ -650,5 +716,191 @@ export class MockDatabase {
         this.payBill(bill.id, payAccount.id);
       }
     }
+  }
+
+  // --- BANK CONNECTIONS ---
+  static getBankConnections(): BankConnection[] {
+    const uid = this.getUserId();
+    return this.getStorageItem<BankConnection[]>(`pt_bank_connections_${uid}`, []);
+  }
+
+  static saveBankConnections(connections: BankConnection[]) {
+    const uid = this.getUserId();
+    this.setStorageItem(`pt_bank_connections_${uid}`, connections);
+  }
+
+  static linkMockBankConnection(
+    institutionName: string, 
+    accountsData: Array<{ name: string; balance: number; type: Account['type'] }>
+  ): BankConnection {
+    const uid = this.getUserId();
+    const connections = this.getBankConnections();
+    
+    // Create new bank connection object
+    const newConn: BankConnection = {
+      id: `conn-${Date.now()}`,
+      user_id: uid,
+      institution_name: institutionName,
+      status: 'active',
+      last_synced_at: new Date().toISOString(),
+      accounts_count: accountsData.length,
+      created_at: new Date().toISOString()
+    };
+    
+    connections.push(newConn);
+    this.saveBankConnections(connections);
+
+    // Create the accounts and populate with initial mock transactions
+    const accounts = this.getAccounts();
+    const txs = this.getTransactions();
+
+    accountsData.forEach((accData, i) => {
+      const newAccId = `acc-linked-${Date.now()}-${i}`;
+      const newAcc: Account = {
+        id: newAccId,
+        user_id: uid,
+        name: accData.name,
+        type: accData.type,
+        balance: accData.type === 'credit' ? -Math.abs(accData.balance) : Math.abs(accData.balance),
+        color: institutionName.toLowerCase().includes('chase') ? 'blue' : 
+               institutionName.toLowerCase().includes('amex') ? 'amber' : 
+               institutionName.toLowerCase().includes('wells') ? 'rose' : 'emerald',
+        account_number: obfuscate(Math.floor(1000 + Math.random() * 9000).toString()),
+        connection_id: newConn.id,
+        is_linked: true,
+        created_at: new Date().toISOString()
+      };
+      
+      accounts.push(newAcc);
+
+      // Create initial simulated pending/past transactions for this account
+      const mockTxPool = [
+        { desc: 'TST* BLUE BOTTLE COFFEE SAN FRANCISCO CA', amount: 5.75, type: 'expense' as const, catId: 'cat-exp-dining' },
+        { desc: 'UBER * TRIP HELP.UBER.COM', amount: 24.50, type: 'expense' as const, catId: 'cat-exp-transport' },
+        { desc: 'NETFLIX.COM* 866-569-7530 CA', amount: 22.99, type: 'expense' as const, catId: 'cat-exp-sub' },
+        { desc: 'WHOLEFOODS.COM * 10243 SF CA', amount: 68.42, type: 'expense' as const, catId: 'cat-exp-groceries' },
+        { desc: 'PAYROLL DEPOSIT * VALK HORIZON VENTURES', amount: 3200.00, type: 'income' as const, catId: 'cat-inc-salary' }
+      ];
+
+      // Add 2-3 random ones from the pool
+      const count = 2 + Math.floor(Math.random() * 2);
+      for (let j = 0; j < count; j++) {
+        const item = mockTxPool[j % mockTxPool.length];
+        // Calculate a random date in the last 5 days
+        const daysAgo = j + 1;
+        const d = new Date();
+        d.setDate(d.getDate() - daysAgo);
+        
+        const tx: Transaction = {
+          id: `tx-linked-${Date.now()}-${i}-${j}`,
+          user_id: uid,
+          account_id: newAccId,
+          category_id: item.catId,
+          amount: item.amount,
+          type: item.type,
+          description: item.desc,
+          date: d.toISOString().slice(0, 16),
+          created_at: new Date().toISOString(),
+          ai_metadata: {
+            clean_merchant: item.desc.split('*')[1]?.trim() || item.desc.split(' ')[0]?.trim(),
+            confidence: 0.95,
+            is_ai_categorized: true,
+            method: 'simulated'
+          }
+        };
+        txs.unshift(tx);
+      }
+    });
+
+    this.saveAccounts(accounts);
+    this.saveTransactions(txs);
+
+    return newConn;
+  }
+
+  static syncMockBankConnection(connectionId: string): Promise<number> {
+    const connections = this.getBankConnections();
+    const connIdx = connections.findIndex(c => c.id === connectionId);
+    if (connIdx === -1) return Promise.resolve(0);
+
+    connections[connIdx].status = 'syncing';
+    this.saveBankConnections(connections);
+
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const updatedConns = this.getBankConnections();
+        const idx = updatedConns.findIndex(c => c.id === connectionId);
+        if (idx !== -1) {
+          updatedConns[idx].status = 'active';
+          updatedConns[idx].last_synced_at = new Date().toISOString();
+          this.saveBankConnections(updatedConns);
+        }
+
+        // Get accounts associated with this connection
+        const accounts = this.getAccounts();
+        const linkedAccounts = accounts.filter(a => a.connection_id === connectionId);
+        
+        if (linkedAccounts.length === 0) {
+          resolve(0);
+          return;
+        }
+
+        const txs = this.getTransactions();
+        let syncedCount = 0;
+
+        // Choose a random account to add 1 new recent transaction
+        const targetAcc = linkedAccounts[Math.floor(Math.random() * linkedAccounts.length)];
+        
+        const syncPool: Array<{ desc: string; amount: number; type: 'income' | 'expense'; catId: string }> = [
+          { desc: 'AMZN Mktp US*HJ9A3', amount: 45.12, type: 'expense', catId: 'cat-exp-groceries' },
+          { desc: 'CONEDISON * ELECTRICITY PAY', amount: 115.80, type: 'expense', catId: 'cat-exp-utilities' },
+          { desc: 'STARBUCKS COFFEE COFFEE SHOP', amount: 7.25, type: 'expense', catId: 'cat-exp-dining' },
+          { desc: 'STRIPE REFUND * GITHUB SPONSOR', amount: 15.00, type: 'income', catId: 'cat-inc-other' }
+        ];
+
+        const item = syncPool[Math.floor(Math.random() * syncPool.length)];
+        
+        // Adjust balance
+        const accIdx = accounts.findIndex(a => a.id === targetAcc.id);
+        if (accIdx !== -1) {
+          const change = item.type === 'income' ? item.amount : -item.amount;
+          accounts[accIdx].balance += change;
+          this.saveAccounts(accounts);
+        }
+
+        const newTx: Transaction = {
+          id: `tx-sync-${Date.now()}`,
+          user_id: this.getUserId(),
+          account_id: targetAcc.id,
+          category_id: 'cat-exp-other', // Mark uncategorized initially for AI simulation
+          amount: item.amount,
+          type: item.type,
+          description: item.desc,
+          date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+          created_at: new Date().toISOString()
+        };
+
+        // Note: We don't categorize yet, let the store sync and run AI categorizer if requested.
+        txs.unshift(newTx);
+        this.saveTransactions(txs);
+        syncedCount = 1;
+
+        resolve(syncedCount);
+      }, 1200); // simulate network latency
+    });
+  }
+
+  static updateTransactionCategory(txId: string, categoryId: string, aiMetadata?: Transaction['ai_metadata']): boolean {
+    const txs = this.getTransactions();
+    const idx = txs.findIndex(t => t.id === txId);
+    if (idx === -1) return false;
+    
+    txs[idx] = {
+      ...txs[idx],
+      category_id: categoryId,
+      ai_metadata: aiMetadata !== undefined ? aiMetadata : txs[idx].ai_metadata
+    };
+    this.saveTransactions(txs);
+    return true;
   }
 }

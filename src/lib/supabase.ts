@@ -155,8 +155,27 @@ export const auth = {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`
+        redirectTo: `${window.location.origin}/api/auth/callback`
       }
+    });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  },
+
+  async resetPasswordForEmail(email: string): Promise<{ success: boolean; error?: string }> {
+    if (isDemoMode()) {
+      const exists = MockDatabase.checkEmailExists(email);
+      if (exists) {
+        return { success: true };
+      }
+      return { success: false, error: 'No user account found with this email address.' };
+    }
+
+    if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/dashboard?recovery=true`,
     });
 
     if (error) return { success: false, error: error.message };

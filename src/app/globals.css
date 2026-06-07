@@ -185,3 +185,24 @@
   z-index: 10;
   position: relative;
 }
+
+@keyframes loading-bar {
+  0% {
+    left: -100%;
+  }
+  50% {
+    left: 25%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.animate-loading-bar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 50%;
+  border-radius: 9999px;
+  animation: loading-bar 1.5s infinite ease-in-out;
+}

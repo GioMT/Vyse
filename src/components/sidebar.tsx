@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useFinanceStore } from '@/hooks/use-finance-store';
-import { isDemoMode } from '@/lib/supabase';
 import { useConfirm } from '@/components/ui/confirmation-provider';
 import { 
   LayoutDashboard, 
@@ -17,18 +16,53 @@ import {
   User,
   Menu,
   X,
-  Wallet
+  Wallet,
+  ChevronDown,
+  UserCog,
+  Key,
+  Palette,
+  HelpCircle,
+  Compass,
+  Globe
 } from 'lucide-react';
 import { HandDollar } from '@/components/ui/hand-dollar';
+import { Dialog } from '@/components/ui/dialog';
+import AccountDetailsModal from './dashboard/account-details-modal';
+import PasswordChangeModal from './dashboard/password-change-modal';
+import AppearanceSettingsModal, { applyTheme, ThemeMode } from './dashboard/appearance-settings-modal';
+import SupportModal from './dashboard/support-modal';
+import IntegrationsModal from './dashboard/integrations-modal';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, fetchData } = useFinanceStore();
+  const { user, logout } = useFinanceStore();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const demoMode = isDemoMode();
   const confirm = useConfirm();
+
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
+
+  const handleRestartTour = () => {
+    setShowProfileMenu(false);
+    localStorage.setItem('vyse_tour_active', 'true');
+    localStorage.setItem('vyse_tour_step', '-1');
+    window.dispatchEvent(new Event('vyse_start_tour'));
+    router.push('/dashboard');
+  };
+
+  // Load and apply theme on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = (localStorage.getItem('vyse_theme') || 'system') as ThemeMode;
+      applyTheme(savedTheme);
+    }
+  }, []);
 
   const handleLogout = async () => {
     const confirmed = await confirm({
@@ -137,8 +171,55 @@ export default function Sidebar() {
         <div className="flex flex-col gap-4">
 
 
-          <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-950/40 border border-neutral-850/50">
-            <div className="flex items-center gap-3">
+          <div className="relative flex items-center justify-between p-3 rounded-xl bg-neutral-950/40 border border-neutral-850/50">
+            {showProfileMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 p-1.5 bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl z-30 flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <button
+                  onClick={() => { setAccountOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
+                >
+                  <UserCog className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Account</span>
+                </button>
+                <button
+                  onClick={() => { setPasswordOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
+                >
+                  <Key className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Password</span>
+                </button>
+                <button
+                  onClick={() => { setAppearanceOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
+                >
+                  <Palette className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Appearance</span>
+                </button>
+                <button
+                  onClick={() => { setSupportOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-855 transition-all cursor-pointer text-left"
+                >
+                  <HelpCircle className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Support</span>
+                </button>
+                <button
+                  onClick={() => { setIntegrationsOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
+                >
+                  <Globe className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Integrations</span>
+                </button>
+                <button
+                  onClick={handleRestartTour}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left border-t border-neutral-850/50 pt-2 mt-1"
+                >
+                  <Compass className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Product Tour</span>
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 min-w-0">
               {user?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img 
@@ -155,7 +236,16 @@ export default function Sidebar() {
                 <span className="text-xs font-semibold text-neutral-200 truncate">{user?.full_name || 'Loading user...'}</span>
                 <span className="text-[10px] text-neutral-500 truncate">{user?.email || 'demo@finance.io'}</span>
               </div>
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="p-1 rounded-md text-neutral-500 hover:text-neutral-350 hover:bg-neutral-800 transition-colors cursor-pointer shrink-0 animate-pulse"
+                title="Profile Settings"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
+              </button>
             </div>
+            
+            <div className="h-5 w-[1px] bg-neutral-850 self-center mx-1" />
             
             <button
               onClick={() => {
@@ -180,7 +270,10 @@ export default function Sidebar() {
       >
         {/* Collapse Toggle Button */}
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => {
+            setCollapsed(!collapsed);
+            setShowProfileMenu(false);
+          }}
           className="absolute right-[-14px] top-8 h-7 w-7 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-neutral-400 hover:text-neutral-100 cursor-pointer transition-colors active:scale-95"
         >
           {collapsed ? <ChevronRight className="h-4.5 w-4.5" /> : <ChevronLeft className="h-4.5 w-4.5" />}
@@ -237,8 +330,55 @@ export default function Sidebar() {
 
 
           {/* User Card */}
-          <div className={`flex items-center justify-between p-2 rounded-xl bg-neutral-950/40 border border-neutral-850/50 ${collapsed ? 'flex-col gap-3 justify-center' : ''}`}>
-            <div className="flex items-center gap-3">
+          <div className={`relative flex items-center justify-between p-2 rounded-xl bg-neutral-950/40 border border-neutral-850/50 ${collapsed ? 'flex-col gap-3 justify-center' : ''}`}>
+            {showProfileMenu && !collapsed && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 p-1.5 bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl z-30 flex flex-col gap-0.5 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <button
+                  onClick={() => { setAccountOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
+                >
+                  <UserCog className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Account</span>
+                </button>
+                <button
+                  onClick={() => { setPasswordOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
+                >
+                  <Key className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Password</span>
+                </button>
+                <button
+                  onClick={() => { setAppearanceOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
+                >
+                  <Palette className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Appearance</span>
+                </button>
+                <button
+                  onClick={() => { setSupportOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
+                >
+                  <HelpCircle className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Support</span>
+                </button>
+                <button
+                  onClick={() => { setIntegrationsOpen(true); setShowProfileMenu(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
+                >
+                  <Globe className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Integrations</span>
+                </button>
+                <button
+                  onClick={handleRestartTour}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left border-t border-neutral-850/50 pt-2 mt-1"
+                >
+                  <Compass className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <span>Product Tour</span>
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 min-w-0">
               {user?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img 
@@ -252,12 +392,23 @@ export default function Sidebar() {
                 </div>
               )}
               {!collapsed && (
-                <div className="flex flex-col min-w-0 max-w-[120px]">
-                  <span className="text-xs font-semibold text-neutral-200 truncate">{user?.full_name || 'Loading user...'}</span>
-                  <span className="text-[10px] text-neutral-500 truncate">{user?.email || 'demo@finance.io'}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="flex flex-col min-w-0 max-w-[120px]">
+                    <span className="text-xs font-semibold text-neutral-200 truncate">{user?.full_name || 'Loading user...'}</span>
+                    <span className="text-[10px] text-neutral-500 truncate">{user?.email || 'demo@finance.io'}</span>
+                  </div>
+                  <button
+                    onClick={() => setShowProfileMenu(!showProfileMenu)}
+                    className="p-1 rounded-md text-neutral-500 hover:text-neutral-350 hover:bg-neutral-800 transition-colors cursor-pointer shrink-0 animate-pulse"
+                    title="Profile Settings"
+                  >
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showProfileMenu ? 'rotate-180' : ''}`} />
+                  </button>
                 </div>
               )}
             </div>
+            
+            <div className={collapsed ? "w-6 h-[1px] bg-neutral-850 my-1 self-center" : "h-5 w-[1px] bg-neutral-850 mx-1 self-center"} />
             
             <button
               onClick={handleLogout}
@@ -276,6 +427,27 @@ export default function Sidebar() {
           )}
         </div>
       </aside>
+
+      {/* Settings Dialog Modals */}
+      <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+        <AccountDetailsModal onSuccess={() => setAccountOpen(false)} />
+      </Dialog>
+
+      <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
+        <PasswordChangeModal onSuccess={() => setPasswordOpen(false)} />
+      </Dialog>
+
+      <Dialog open={appearanceOpen} onOpenChange={setAppearanceOpen}>
+        <AppearanceSettingsModal onSuccess={() => setAppearanceOpen(false)} />
+      </Dialog>
+
+      <Dialog open={supportOpen} onOpenChange={setSupportOpen}>
+        <SupportModal onSuccess={() => setSupportOpen(false)} />
+      </Dialog>
+
+      <Dialog open={integrationsOpen} onOpenChange={setIntegrationsOpen}>
+        <IntegrationsModal onSuccess={() => setIntegrationsOpen(false)} />
+      </Dialog>
     </>
   );
 }

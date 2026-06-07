@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useFinanceStore, TimeFilter } from '@/hooks/use-finance-store';
 import StatsCards from '@/components/dashboard/stats-cards';
 import Charts from '@/components/dashboard/charts';
-import ProductTour from '@/components/dashboard/product-tour';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import TransactionForm from '@/components/dashboard/transaction-form';
 // import AccountForm from '@/components/dashboard/account-form';

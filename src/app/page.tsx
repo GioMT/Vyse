@@ -16,16 +16,20 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle,
-  Key
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function Home() {
-  const { login, loginWithEmail, signUpWithEmail, checkEmailExists, resendVerificationEmail, fetchUser } = useFinanceStore();
+  const { login, loginWithEmail, signUpWithEmail, checkEmailExists, resendVerificationEmail, fetchUser, sendPasswordResetEmail } = useFinanceStore();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [authState, setAuthState] = useState<'signin' | 'signup' | 'verify'>('signin');
+  const [authState, setAuthState] = useState<'signin' | 'signup' | 'verify' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dob, setDob] = useState('');
@@ -178,6 +182,29 @@ export default function Home() {
       } else {
         setError(res.error || 'Failed to resend verification email.');
       }
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError('Please enter your email address.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await sendPasswordResetEmail(email);
+      if (res.success) {
+        setResetEmailSent(true);
+      } else {
+        setError(res.error || 'Failed to send password reset request.');
+      }
+    } catch (err) {
+      console.error('Reset error:', err);
+      setError('Failed to request password reset.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -355,14 +382,14 @@ export default function Home() {
                   <div className="flex rounded-xl bg-neutral-950 p-1 border border-neutral-850">
                     <button
                       type="button"
-                      onClick={() => { setAuthState('signin'); setError(null); setResendStatus(null); }}
+                      onClick={() => { setAuthState('signin'); setError(null); setResendStatus(null); setShowPassword(false); }}
                       className="flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer bg-neutral-850 text-neutral-100 border border-neutral-800 shadow-sm"
                     >
                       Sign In
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setAuthState('signup'); setError(null); setResendStatus(null); }}
+                      onClick={() => { setAuthState('signup'); setError(null); setResendStatus(null); setShowPassword(false); }}
                       className="flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer text-neutral-550 hover:text-neutral-350"
                     >
                       Sign Up
@@ -395,17 +422,33 @@ export default function Home() {
                     </div>
 
                     <div className="space-y-1.5 text-left">
-                      <label className="text-xs font-semibold text-neutral-500">Password</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-neutral-500">Password</label>
+                        <button
+                          type="button"
+                          onClick={() => { setAuthState('forgot'); setError(null); }}
+                          className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold focus:outline-none cursor-pointer"
+                        >
+                          Forgot Password?
+                        </button>
+                      </div>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                         <input
-                          type="password"
+                          type={showPassword ? "text" : "password"}
                           placeholder="••••••••"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
-                          className="h-10.5 w-full pl-9 pr-3 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-400 transition-colors"
+                          className="h-10.5 w-full pl-9 pr-10 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-400 transition-colors"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200 transition-colors focus:outline-none cursor-pointer flex items-center justify-center"
+                        >
+                          {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                        </button>
                       </div>
                     </div>
 
@@ -452,6 +495,101 @@ export default function Home() {
                 </>
               )}
 
+              {authState === 'forgot' && (
+                <>
+                  {/* Logo / Header */}
+                  <div className="flex items-center gap-2.5 justify-center">
+                    <div className="h-10 w-10 rounded-xl overflow-hidden border border-neutral-850 shadow-inner shrink-0 flex items-center justify-center">
+                      <Image src="/vyse-logo.jpeg" alt="Vyse Logo" width={43} height={43} className="h-[43px] w-[43px] min-w-[43px] object-cover" />
+                    </div>
+                    <h2 className="text-xl font-extrabold text-neutral-100 tracking-tight">Reset Password</h2>
+                  </div>
+
+                  {error && (
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 flex items-start gap-2 animate-in fade-in duration-200">
+                      <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  {!resetEmailSent ? (
+                    <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 text-left">
+                      <p className="text-xs text-neutral-500 leading-normal">
+                        Enter your e-mail address and we will send you a secure link to reset your account password.
+                      </p>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-500">Email Address</label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                          <input
+                            type="email"
+                            placeholder="you@example.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            className="h-10.5 w-full pl-9 pr-3 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-400 transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full h-11 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-950 font-extrabold text-sm transition-all duration-200 flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                      >
+                        {loading ? (
+                          <div className="h-5 w-5 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <span>Send Reset Link</span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setAuthState('signin'); setError(null); }}
+                        className="w-full h-11 rounded-xl bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 hover:border-neutral-800 text-neutral-400 font-bold text-sm transition-all duration-200 flex items-center justify-center cursor-pointer"
+                      >
+                        Back to Sign In
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="text-center py-4 space-y-4">
+                      <div className="mx-auto h-12 w-12 rounded-full bg-indigo-950 border border-indigo-850 flex items-center justify-center text-indigo-400 animate-pulse">
+                        <Mail className="h-6 w-6" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h4 className="text-sm font-extrabold text-neutral-200">Reset Link Sent</h4>
+                        <p className="text-xs text-neutral-500 leading-relaxed max-w-xs mx-auto">
+                          {isDemoMode() ? (
+                            <>
+                              Simulated Reset: A password recovery session has been initialized. Normally, this sends a real link. Click below to simulate landing:
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  router.push('/dashboard?recovery=true');
+                                }}
+                                className="block w-full mt-3 h-8.5 rounded-lg bg-indigo-650 hover:bg-indigo-600 text-white font-bold text-[11px] cursor-pointer"
+                              >
+                                Simulate Recovery Landing
+                              </button>
+                            </>
+                          ) : (
+                            `If an account exists for ${email}, a secure password reset link has been dispatched.`
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthState('signin'); setResetEmailSent(false); setError(null); }}
+                        className="w-full h-10 rounded-xl bg-neutral-950 border border-neutral-850 hover:bg-neutral-900 text-xs font-bold text-neutral-400 cursor-pointer"
+                      >
+                        Back to Sign In
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
               {authState === 'signup' && (
                 <>
                   {/* Custom Onboarding Sign Up Layout */}
@@ -467,14 +605,14 @@ export default function Home() {
                   <div className="flex rounded-xl bg-neutral-950 p-1 border border-neutral-850">
                     <button
                       type="button"
-                      onClick={() => { setAuthState('signin'); setError(null); setResendStatus(null); }}
+                      onClick={() => { setAuthState('signin'); setError(null); setResendStatus(null); setShowPassword(false); }}
                       className="flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer text-neutral-550 hover:text-neutral-350"
                     >
                       Sign In
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setAuthState('signup'); setError(null); setResendStatus(null); }}
+                      onClick={() => { setAuthState('signup'); setError(null); setResendStatus(null); setShowPassword(false); }}
                       className="flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer bg-neutral-850 text-neutral-100 border border-neutral-800 shadow-sm"
                     >
                       Sign Up
@@ -560,14 +698,23 @@ export default function Home() {
                     {/* Password Input */}
                     <div className="space-y-1.5 text-left">
                       <label className="text-xs font-semibold text-neutral-500">Password</label>
-                      <input
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        className="h-10.5 w-full px-3.5 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          className="h-10.5 w-full pl-3.5 pr-10 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200 transition-colors focus:outline-none cursor-pointer flex items-center justify-center"
+                        >
+                          {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Terms & Conditions Checkbox */}
@@ -646,7 +793,7 @@ export default function Home() {
                     <div className="space-y-1">
                       <h2 className="text-xl font-extrabold text-neutral-100 tracking-tight">Verify your email</h2>
                       <p className="text-xs text-neutral-500 max-w-xs mx-auto">
-                        We've sent a verification {isDemoMode() ? 'code' : 'link'} to <span className="text-indigo-400 font-semibold">{tempSignUpData?.email}</span>.
+                        We&apos;ve sent a verification {isDemoMode() ? 'code' : 'link'} to <span className="text-indigo-400 font-semibold">{tempSignUpData?.email}</span>.
                       </p>
                     </div>
                   </div>
@@ -675,7 +822,7 @@ export default function Home() {
                           <span>Simulated Verification Box</span>
                         </div>
                         <p className="text-neutral-400 leading-relaxed">
-                          Since you are running in **Demo Mode**, we've simulated sending a code. Use the code below to complete registration:
+                          Since you are running in **Demo Mode**, we&apos;ve simulated sending a code. Use the code below to complete registration:
                         </p>
                         <div className="flex items-center justify-between bg-neutral-950 px-3.5 py-2 rounded-xl border border-neutral-850 mt-1 select-all">
                           <span className="font-mono text-xs text-neutral-500">CODE:</span>
@@ -721,7 +868,7 @@ export default function Home() {
                     <div className="space-y-4">
                       <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/15 text-xs text-left space-y-2.5">
                         <p className="text-neutral-300 leading-relaxed font-medium">
-                          We've sent an activation link to your email address. Please click the link to activate your account.
+                          We&apos;ve sent an activation link to your email address. Please click the link to activate your account.
                         </p>
                         <p className="text-neutral-500 leading-relaxed">
                           Once confirmed, you will be redirected to the dashboard. If your browser does not open automatically, you can sign in below.
@@ -762,6 +909,7 @@ export default function Home() {
                         setAuthState(isDemoMode() ? 'signup' : 'signin');
                         setError(null);
                         setResendStatus(null);
+                        setShowPassword(false);
                       }}
                       className="text-xs font-bold text-neutral-500 hover:text-neutral-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer self-center"
                     >

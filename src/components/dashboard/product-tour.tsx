@@ -8,9 +8,7 @@ import {
   X, 
   ChevronRight, 
   ChevronLeft, 
-  CheckCircle2, 
-  Zap,
-  Play
+  CheckCircle2
 } from 'lucide-react';
 
 interface TourStep {
@@ -189,10 +187,22 @@ export default function ProductTour() {
   const [isMobile, setIsMobile] = useState(false);
   
   const setTourActive = useFinanceStore(state => state.setTourActive);
+  const [isInitialTour, setIsInitialTour] = useState(false);
+
+  // Sync isInitialTour status with localStorage when active status changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      Promise.resolve().then(() => {
+        setIsInitialTour(localStorage.getItem('vyse_initial_tour') === 'true');
+      });
+    }
+  }, [isActive]);
 
   // Sync tour active state with global finance store
   useEffect(() => {
-    setTourActive(isActive);
+    Promise.resolve().then(() => {
+      setTourActive(isActive);
+    });
   }, [isActive, setTourActive]);
 
   // Detect mobile viewport
@@ -217,14 +227,16 @@ export default function ProductTour() {
 
     if (tourParam === 'true' || tourActive === 'true') {
       tourInitialized.current = true;
-      setIsActive(true);
       
-      if (savedStepStr !== null) {
-        const savedStep = parseInt(savedStepStr, 10);
-        setCurrentStep(savedStep);
-      } else {
-        setCurrentStep(-1); // Start with Welcome Modal
-      }
+      Promise.resolve().then(() => {
+        setIsActive(true);
+        if (savedStepStr !== null) {
+          const savedStep = parseInt(savedStepStr, 10);
+          setCurrentStep(savedStep);
+        } else {
+          setCurrentStep(-1); // Start with Welcome Modal
+        }
+      });
       
       // Clean query parameter from URL safely
       const url = new URL(window.location.href);
@@ -312,9 +324,19 @@ export default function ProductTour() {
 
   // Update target highlighting and tooltip position when coordinates or settings change
   useEffect(() => {
+    let active = true;
+
+    const updateStyles = (hStyle: React.CSSProperties | null, tStyle: React.CSSProperties | null) => {
+      // Defer state updates to avoid setState-in-effect warning
+      Promise.resolve().then(() => {
+        if (!active) return;
+        setHighlightStyle(hStyle);
+        setTooltipStyle(tStyle);
+      });
+    };
+
     if (!isActive || currentStep < 0 || currentStep >= TOUR_STEPS.length || showCompletion) {
-      setHighlightStyle(null);
-      setTooltipStyle(null);
+      updateStyles(null, null);
       return;
     }
 
@@ -322,8 +344,7 @@ export default function ProductTour() {
     
     // Verify we are on the correct subpage before calculating coordinates
     if (step.path !== pathname) {
-      setHighlightStyle(null);
-      setTooltipStyle(null);
+      updateStyles(null, null);
       return;
     }
 
@@ -331,8 +352,7 @@ export default function ProductTour() {
       const element = document.getElementById(step.targetId);
       if (!element) {
         // Fallback positioning if element not found
-        setHighlightStyle(null);
-        setTooltipStyle({
+        updateStyles(null, {
           position: 'fixed',
           top: '50%',
           left: '50%',
@@ -347,8 +367,7 @@ export default function ProductTour() {
 
       // Fallback for hidden elements (e.g. desktop sidebar on mobile)
       if (isElementHidden) {
-        setHighlightStyle(null);
-        setTooltipStyle({
+        updateStyles(null, {
           position: 'fixed',
           top: '50%',
           left: '50%',
@@ -392,7 +411,6 @@ export default function ProductTour() {
         height: `${hHeight}px`,
         zIndex: 9995
       };
-      setHighlightStyle(highlight);
 
       // Check if target is a centered modal dialog card to keep tooltip safely on the side
       const isModalStep = ['tour-transaction-form', 'tour-bill-form', 'tour-loan-form', 'tour-account-form'].includes(step.targetId);
@@ -456,13 +474,15 @@ export default function ProductTour() {
         top = window.innerHeight - tooltipHeight - 16;
       }
 
-      setTooltipStyle({
+      const tooltip: React.CSSProperties = {
         position: 'fixed',
         top: `${top}px`,
         left: `${left}px`,
         width: isMobile ? 'calc(100vw - 32px)' : `${tooltipWidth}px`,
         zIndex: 9998
-      });
+      };
+
+      updateStyles(highlight, tooltip);
     };
 
     // Recalculate immediately and at multiple intervals to capture smooth scrolling transition completely
@@ -477,6 +497,7 @@ export default function ProductTour() {
     window.addEventListener('scroll', calculatePositions, true);
 
     return () => {
+      active = false;
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
@@ -540,6 +561,7 @@ export default function ProductTour() {
   };
 
   const handleSkip = () => {
+    if (isInitialTour) return;
     setIsActive(false);
     localStorage.removeItem('vyse_tour_active');
     localStorage.removeItem('vyse_tour_step');
@@ -550,6 +572,7 @@ export default function ProductTour() {
     setShowCompletion(false);
     localStorage.removeItem('vyse_tour_active');
     localStorage.removeItem('vyse_tour_step');
+    localStorage.removeItem('vyse_initial_tour');
   };
 
   // Extract highlight dimensions if active
@@ -567,14 +590,14 @@ export default function ProductTour() {
       {/* Dark Overlay Backdrop with soft rounded cutout using 10-panel CSS masking */}
       {(!hasValidHighlight || currentStep === -1 || showCompletion) ? (
         <div 
-          className="fixed inset-0 bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 animate-in fade-in"
+          className={`fixed inset-0 bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 animate-in fade-in ${isInitialTour ? '' : 'cursor-pointer'}`}
           onClick={handleSkip}
         />
       ) : (
         <>
           {/* Top Panel */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: 0,
               top: 0,
@@ -585,7 +608,7 @@ export default function ProductTour() {
           />
           {/* Bottom Panel */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: 0,
               top: `${hTop + hHeight}px`,
@@ -596,7 +619,7 @@ export default function ProductTour() {
           />
           {/* Left Panel */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: 0,
               top: `${hTop}px`,
@@ -607,7 +630,7 @@ export default function ProductTour() {
           />
           {/* Right Panel */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: `${hLeft + hWidth}px`,
               top: `${hTop}px`,
@@ -618,7 +641,7 @@ export default function ProductTour() {
           />
           {/* Top-Left Corner */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: `${hLeft}px`,
               top: `${hTop}px`,
@@ -631,7 +654,7 @@ export default function ProductTour() {
           />
           {/* Top-Right Corner */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: `${hLeft + hWidth - R}px`,
               top: `${hTop}px`,
@@ -644,7 +667,7 @@ export default function ProductTour() {
           />
           {/* Bottom-Left Corner */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: `${hLeft}px`,
               top: `${hTop + hHeight - R}px`,
@@ -657,7 +680,7 @@ export default function ProductTour() {
           />
           {/* Bottom-Right Corner */}
           <div 
-            className="fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] cursor-pointer transition-opacity duration-300"
+            className={`fixed bg-black/65 backdrop-blur-[1.5px] z-[9990] transition-opacity duration-300 ${isInitialTour ? '' : 'cursor-pointer'}`}
             style={{
               left: `${hLeft + hWidth - R}px`,
               top: `${hTop + hHeight - R}px`,
@@ -692,7 +715,7 @@ export default function ProductTour() {
                   Welcome to Your Workspace!
                 </h3>
                 <p className="text-xs text-neutral-450 leading-relaxed">
-                  Let's take a quick 1-minute interactive walkthrough to get you familiar with your new financial dashboard dashboards.
+                  Let&apos;s take a quick 1-minute interactive walkthrough to get you familiar with your new financial dashboard dashboards.
                 </p>
               </div>
 
@@ -704,12 +727,14 @@ export default function ProductTour() {
                   <span>Start Tour</span>
                   <ChevronRight className="h-4 w-4" />
                 </button>
-                <button
-                  onClick={handleSkip}
-                  className="px-4 h-10 rounded-xl border border-neutral-800 text-neutral-400 hover:text-neutral-200 text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Skip
-                </button>
+                {!isInitialTour && (
+                  <button
+                    onClick={handleSkip}
+                    className="px-4 h-10 rounded-xl border border-neutral-800 text-neutral-400 hover:text-neutral-200 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Skip
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -749,13 +774,15 @@ export default function ProductTour() {
                 <h4 className="text-sm font-extrabold text-neutral-100 tracking-tight">
                   {TOUR_STEPS[currentStep].title}
                 </h4>
-                <button 
-                  onClick={handleSkip}
-                  className="text-neutral-500 hover:text-neutral-350 p-0.5 rounded transition-colors cursor-pointer"
-                  title="Skip Tour"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                {!isInitialTour && (
+                  <button 
+                    onClick={handleSkip}
+                    className="text-neutral-550 hover:text-neutral-350 p-0.5 rounded transition-colors cursor-pointer"
+                    title="Skip Tour"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
 
               {/* Description */}
@@ -811,10 +838,10 @@ export default function ProductTour() {
 
               <div className="space-y-2">
                 <h3 className="text-xl font-extrabold text-neutral-100 tracking-tight">
-                  You're Ready to Roll!
+                  You&apos;re Ready to Roll!
                 </h3>
                 <p className="text-xs text-neutral-450 leading-relaxed max-w-sm mx-auto">
-                  You've successfully completed the tour. You can restart the tour at any time by clicking "Restart Product Tour" in the sidebar.
+                  You&apos;ve successfully completed the tour. You can restart the tour at any time by clicking &quot;Restart Product Tour&quot; in the sidebar.
                 </p>
               </div>
 
@@ -822,7 +849,7 @@ export default function ProductTour() {
                 onClick={handleFinish}
                 className="w-full h-10 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-bold transition-all active:scale-[0.98] shadow-lg shadow-emerald-600/10 cursor-pointer"
               >
-                Let's Go!
+                Let&apos;s Go!
               </button>
             </div>
           </div>

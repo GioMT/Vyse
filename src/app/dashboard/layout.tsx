@@ -1,20 +1,21 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useFinanceStore } from '@/hooks/use-finance-store';
 import Sidebar from '@/components/sidebar';
 import ProductTour from '@/components/dashboard/product-tour';
-import { HelpCircle } from 'lucide-react';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading, fetchUser, fetchData, isTourActive } = useFinanceStore();
+  const { user, loading, fetchUser, fetchData } = useFinanceStore();
   const router = useRouter();
+  const [fadeOut, setFadeOut] = useState(false);
+  const [renderPreloader, setRenderPreloader] = useState(true);
 
   useEffect(() => {
     // Verify session
@@ -32,25 +33,30 @@ export default function DashboardLayout({
     });
   }, [fetchUser, fetchData, router]);
 
-  if (loading || !user) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-neutral-950 text-neutral-100 font-sans">
-        <div className="relative flex flex-col items-center gap-4">
-          {/* Glowing loader */}
-          <div className="absolute h-24 w-24 rounded-full bg-indigo-200/30 blur-xl animate-pulse" />
-          <div className="h-14 w-14 rounded-2xl overflow-hidden animate-bounce shadow-xl flex items-center justify-center">
-            <Image src="/vyse-logo.jpeg" alt="Vyse Logo" width={58} height={58} className="h-[58px] w-[58px] min-w-[58px] object-cover" priority />
-          </div>
-          <span className="text-neutral-500 text-sm font-medium tracking-wide animate-pulse">
-            Configuring secure connection...
-          </span>
-        </div>
-      </div>
-    );
+  useEffect(() => {
+    // Once loading completes and the user session is verified, trigger smooth fade out
+    if (!loading && user) {
+      const fadeTimeout = setTimeout(() => {
+        setFadeOut(true);
+        const removeTimeout = setTimeout(() => {
+          setRenderPreloader(false);
+        }, 700); // matches the duration-700 CSS transition
+        return () => clearTimeout(removeTimeout);
+      }, 400); // 400ms delay to allow underlying content layout rendering
+      return () => clearTimeout(fadeTimeout);
+    }
+  }, [loading, user]);
+
+  // If we're not loading and there's no user session, let useEffect redirect to landing page
+  if (!loading && !user) {
+    return null;
   }
 
+  // Preloader active while fetching details, or during the fade-out phase
+  const showPreloader = renderPreloader || loading || !user;
+
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-neutral-950 text-neutral-100 overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-neutral-950 text-neutral-100 overflow-hidden font-sans relative">
       {/* Navigation Sidebar */}
       <Sidebar />
 
@@ -63,27 +69,50 @@ export default function DashboardLayout({
         <div className="relative z-10 flex-1 flex flex-col">
           {children}
         </div>
-        <ProductTour />
-
-        {/* Floating Help / Restart Product Tour Button in the corner */}
-        {!isTourActive && (
-          <button
-            onClick={() => {
-              localStorage.setItem('vyse_tour_active', 'true');
-              localStorage.setItem('vyse_tour_step', '-1');
-              window.dispatchEvent(new Event('vyse_start_tour'));
-              router.push('/dashboard');
-            }}
-            className="fixed bottom-6 right-6 h-10 w-10 rounded-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 active:scale-95 text-neutral-400 hover:text-neutral-200 flex items-center justify-center cursor-pointer transition-all duration-150 shadow-lg z-40 group"
-            title="Restart Product Tour"
-          >
-            <HelpCircle className="h-5 w-5" />
-            <span className="absolute right-12 bg-neutral-950 border border-neutral-850 px-2.5 py-1 rounded-lg text-xs font-bold text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap shadow-xl z-50">
-              Restart Tour
-            </span>
-          </button>
-        )}
+        <React.Suspense fallback={null}>
+          <ProductTour />
+        </React.Suspense>
       </main>
+
+      {/* Premium Fluid Preloader Screen Overlay */}
+      {showPreloader && (
+        <div 
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-neutral-950 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            fadeOut ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100 scale-100'
+          }`}
+        >
+          <div className="relative flex flex-col items-center gap-6 select-none">
+            {/* Glowing background halo */}
+            <div className="absolute h-36 w-36 rounded-full bg-indigo-500/20 blur-[50px] animate-pulse" />
+            
+            {/* Bounce & Scale logo container */}
+            <div className="relative h-16 w-16 rounded-2xl overflow-hidden shadow-2xl border border-neutral-800/80 flex items-center justify-center bg-neutral-900/60 backdrop-blur-md">
+              <Image 
+                src="/vyse-logo.jpeg" 
+                alt="Vyse Logo" 
+                width={64} 
+                height={64} 
+                className="h-[64px] w-[64px] object-cover" 
+                priority 
+              />
+            </div>
+            
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <span className="text-neutral-200 text-sm font-extrabold tracking-wider uppercase">
+                Vyse Workspace
+              </span>
+              <span className="text-neutral-500 text-xs font-medium tracking-wide animate-pulse">
+                Decrypting session databases...
+              </span>
+            </div>
+
+            {/* Micro loading progress line */}
+            <div className="w-32 h-[2px] bg-neutral-900 overflow-hidden relative rounded-full mt-1">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full animate-loading-bar" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

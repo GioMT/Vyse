@@ -12,7 +12,9 @@ import {
   Plus, 
   ArrowLeft, 
   ArrowRight,
-  FilterX
+  FilterX,
+  Sparkles,
+  Wand2
 } from 'lucide-react';
 import { parseDescription } from '@/lib/format';
 import { useConfirm } from '@/components/ui/confirmation-provider';
@@ -22,7 +24,8 @@ export default function TransactionsPage() {
     accounts, 
     categories, 
     transactions, 
-    deleteTransaction 
+    deleteTransaction,
+    categorizeWithAI
   } = useFinanceStore();
 
   const confirm = useConfirm();
@@ -236,9 +239,32 @@ export default function TransactionsPage() {
                       </td>
                       <td className="py-4 font-bold text-neutral-100 text-sm">{cleanDesc}</td>
                       <td className="py-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catColor}`}>
-                          {cat ? cat.name : 'Uncategorized'}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catColor}`}>
+                            {cat ? cat.name : 'Uncategorized'}
+                          </span>
+                          
+                          {tx.ai_metadata?.is_ai_categorized ? (
+                            <div className="group relative flex items-center shrink-0">
+                              <Sparkles className="h-3.5 w-3.5 text-indigo-400 animate-pulse cursor-help" />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 rounded-xl bg-neutral-950/95 border border-neutral-850 text-[10px] text-neutral-400 shadow-2xl z-50 text-center leading-normal">
+                                <span className="font-bold text-neutral-200 block mb-0.5">AI Cleaned Merchant</span>
+                                &quot;{tx.ai_metadata.clean_merchant}&quot;
+                                <span className="block mt-1 font-semibold text-indigo-400">Confidence: {Math.round((tx.ai_metadata.confidence ?? 0.9) * 100)}% via Gemini</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                await categorizeWithAI(tx.id);
+                              }}
+                              className="p-1 rounded-md bg-neutral-950 border border-neutral-850 hover:border-indigo-500 hover:text-indigo-400 text-neutral-500 hover:bg-indigo-500/5 transition-all active:scale-95 cursor-pointer shrink-0"
+                              title="Run Gemini AI categorization"
+                            >
+                              <Wand2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 text-neutral-400 font-medium hidden md:table-cell">{acc ? acc.name : 'Unknown Account'}</td>
                       <td className="py-4 text-right">

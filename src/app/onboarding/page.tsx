@@ -101,9 +101,11 @@ export default function OnboardingPage() {
       if (res.success) {
         if (startTour) {
           localStorage.setItem('vyse_tour_active', 'true');
+          localStorage.setItem('vyse_initial_tour', 'true');
           router.push('/dashboard?tour=true');
         } else {
           localStorage.removeItem('vyse_tour_active');
+          localStorage.removeItem('vyse_initial_tour');
           router.push('/dashboard');
         }
       } else {
@@ -440,7 +442,7 @@ export default function OnboardingPage() {
                   Welcome to Vyse!
                 </h2>
                 <p className="text-sm text-neutral-400 max-w-sm mx-auto">
-                  Your profile is verified and your financial portfolio is connected. You're ready to take control of your wealth.
+                  Your profile is verified and your financial portfolio is connected. You&apos;re ready to take control of your wealth.
                 </p>
               </div>
 
@@ -476,22 +478,14 @@ export default function OnboardingPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 items-center justify-center pt-2">
+              <div className="flex justify-center pt-2">
                 <button
                   onClick={() => handleOnboardingFinalize(true)}
                   disabled={loading}
-                  className="w-full sm:w-auto px-6 h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-550 hover:to-indigo-450 text-white font-extrabold text-sm transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/10 active:scale-[0.98] cursor-pointer"
+                  className="w-full sm:w-80 px-6 h-11 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-550 hover:to-indigo-450 text-white font-extrabold text-sm transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/10 active:scale-[0.98] cursor-pointer"
                 >
                   <span>Start Tour</span>
                   <ChevronRight className="h-4 w-4" />
-                </button>
-                
-                <button
-                  onClick={() => handleOnboardingFinalize(false)}
-                  disabled={loading}
-                  className="w-full sm:w-auto px-5 h-11 rounded-xl border border-neutral-800 hover:bg-neutral-850 hover:text-neutral-100 text-neutral-400 text-xs font-bold transition-all duration-150 cursor-pointer"
-                >
-                  Skip Tour
                 </button>
               </div>
 

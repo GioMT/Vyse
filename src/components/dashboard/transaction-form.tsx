@@ -59,7 +59,7 @@ interface TransactionFormProps {
 }
 
 export default function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const { accounts, categories, addTransaction } = useFinanceStore();
+  const { accounts, categories, addTransaction, isTourActive } = useFinanceStore();
   const confirm = useConfirm();
 
   const {
@@ -335,8 +335,9 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
         <DialogFooter className="pt-2 sm:justify-end gap-2">
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="h-10 px-4 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-98 text-white transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            disabled={isSubmitting || isTourActive}
+            className="h-10 px-4 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-98 text-white transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            title={isTourActive ? "Submit actions are disabled during the product tour" : undefined}
           >
             {isSubmitting ? (
               <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

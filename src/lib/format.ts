@@ -31,7 +31,7 @@ export const formatCurrency = (val: number, customCurrency?: string): string => 
       style: 'currency',
       currency: userCurrency
     }).format(val);
-  } catch (e) {
+  } catch {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
       currency: 'PHP'
@@ -70,7 +70,7 @@ export const getCurrencySymbol = (customCurrency?: string): string => {
       maximumFractionDigits: 0
     });
     return formatter.format(0).replace(/\d/g, '').trim();
-  } catch (e) {
+  } catch {
     return '₱';
   }
 };
