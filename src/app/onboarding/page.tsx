@@ -20,7 +20,7 @@ import AccountForm from '@/components/dashboard/account-form';
 import { ATMCard, PaperBill } from '@/app/dashboard/accounts/page';
 
 export default function OnboardingPage() {
-  const { accounts, fetchUser, updateProfile } = useFinanceStore();
+  const { user, accounts, fetchUser, updateProfile } = useFinanceStore();
   const router = useRouter();
   
   const [loading, setLoading] = useState(true);
@@ -34,6 +34,9 @@ export default function OnboardingPage() {
   const [sex, setSex] = useState('');
   const [email, setEmail] = useState('');
   const [currency, setCurrency] = useState('PHP');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Dialog state for Account Form
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
@@ -65,11 +68,26 @@ export default function OnboardingPage() {
       return;
     }
 
+    if (user?.is_oauth) {
+      if (!password || !confirmPassword) {
+        setError('Please set up a password for manual login.');
+        return;
+      }
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
     try {
       const combinedName = `${firstName} ${lastName}`.trim();
-      const res = await updateProfile(combinedName, dob, sex, false, currency);
+      const res = await updateProfile(combinedName, dob, sex, false, currency, user?.is_oauth ? password : undefined);
       if (res.success) {
         setStep(2);
       } else {
@@ -304,6 +322,50 @@ export default function OnboardingPage() {
                     <option value="SGD" className="bg-neutral-950 text-neutral-100">Singapore Dollar (SGD - S$)</option>
                   </select>
                 </div>
+
+                {/* Password Setup for OAuth users */}
+                {user?.is_oauth && (
+                  <div className="space-y-3 p-4 rounded-xl bg-neutral-950/40 border border-neutral-850/50 animate-in fade-in duration-200">
+                    <div className="text-left space-y-1">
+                      <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">Set Up Account Password</span>
+                      <p className="text-[10px] text-neutral-500 leading-normal">
+                        Create a password to enable manual login using your email address ({email}).
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-left">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-500">Password</label>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Min. 6 chars"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          className="h-10.5 w-full px-3.5 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
+                        />
+                      </div>
+                      <div className="space-y-1.5 font-sans relative">
+                        <label className="text-xs font-semibold text-neutral-500">Confirm Password</label>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Confirm"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          required
+                          className="h-10.5 w-full px-3.5 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-[38px] text-[10px] text-neutral-500 hover:text-neutral-350 font-bold tracking-wide transition-colors uppercase select-none cursor-pointer"
+                        >
+                          {showPassword ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   type="submit"

@@ -30,6 +30,7 @@ export interface Profile {
   onboarded?: boolean;
   currency?: string;
   is_oauth?: boolean;
+  has_password?: boolean;
   created_at: string;
 }
 
@@ -381,12 +382,39 @@ export class MockDatabase {
     if (idx !== -1) {
       users[idx] = {
         ...users[idx],
-        password: newPassword
+        password: newPassword,
+        has_password: true
       };
       this.setStorageItem('pt_mock_users', users);
+      
+      // Update session user as well
+      const sessionUser = this.getSessionUser();
+      if (sessionUser) {
+        sessionUser.has_password = true;
+        this.setSessionUser(sessionUser);
+      }
       return true;
     }
     return false;
+  }
+
+  static deleteMockUser(): void {
+    const user = this.getSessionUser();
+    if (!user) return;
+    
+    // Remove from mock users list
+    const users = this.getMockUsers();
+    const filtered = users.filter(u => u.id !== user.id);
+    this.setStorageItem('pt_mock_users', filtered);
+    
+    // Clear user stores
+    this.setStorageItem(`pt_accounts_${user.id}`, []);
+    this.setStorageItem(`pt_transactions_${user.id}`, []);
+    this.setStorageItem(`pt_bills_${user.id}`, []);
+    this.setStorageItem(`pt_loans_${user.id}`, []);
+    
+    // Clear session
+    this.setSessionUser(null);
   }
 
   private static initUserStores(userId: string) {

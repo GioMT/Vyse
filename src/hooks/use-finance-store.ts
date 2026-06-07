@@ -47,7 +47,8 @@ interface FinanceState {
   signUpWithEmail: (email: string, password: string, fullName: string, dob?: string, sex?: string) => Promise<{ success: boolean; needsVerification: boolean; error?: string }>;
   checkEmailExists: (email: string) => Promise<boolean>;
   resendVerificationEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
-  updateProfile: (fullName: string, dob: string, sex: string, onboarded?: boolean, currency?: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (fullName: string, dob: string, sex: string, onboarded?: boolean, currency?: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  deleteUserAccount: () => Promise<boolean>;
   logout: () => Promise<void>;
   fetchData: () => Promise<void>;
   setTourActive: (active: boolean) => void;
@@ -210,13 +211,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
       return await auth.resendVerificationEmail(email);
     },
 
-    updateProfile: async (fullName, dob, sex, onboarded, currency) => {
-      const res = await auth.updateProfile(fullName, dob, sex, onboarded, currency);
+    updateProfile: async (fullName, dob, sex, onboarded, currency, password) => {
+      const res = await auth.updateProfile(fullName, dob, sex, onboarded, currency, password);
       if (res.success && res.profile) {
         set({ user: res.profile });
         return { success: true };
       }
       return { success: false, error: res.error || 'Profile update failed' };
+    },
+
+    deleteUserAccount: async () => {
+      if (isDemoMode()) {
+        MockDatabase.deleteMockUser();
+        set({ user: null });
+        return true;
+      }
+      if (supabase) {
+        const { error } = await supabase.rpc('delete_own_user');
+        if (error) {
+          console.error('Error closing user account:', error.message);
+          return false;
+        }
+        set({ user: null });
+        return true;
+      }
+      return false;
     },
 
     logout: async () => {

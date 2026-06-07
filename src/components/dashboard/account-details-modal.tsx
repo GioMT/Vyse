@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useRouter } from 'next/navigation';
 import { useFinanceStore } from '@/hooks/use-finance-store';
 import { isDemoMode } from '@/lib/supabase';
 import { 
@@ -36,6 +37,10 @@ const verifyPasswordSchema = z.object({
   password: z.string().min(1, { message: 'Password is required' }),
 });
 
+const verifyDeleteSchema = z.object({
+  password: z.string().min(1, { message: 'Password is required' }),
+});
+
 const newEmailSchema = z.object({
   newEmail: z.string().email({ message: 'Please enter a valid email address' }),
 });
@@ -53,10 +58,11 @@ interface AccountDetailsModalProps {
   onSuccess: () => void;
 }
 
-type Step = 'view' | 'edit-profile' | 'auth' | 'new-email' | 'verify-code';
+type Step = 'view' | 'edit-profile' | 'auth' | 'new-email' | 'verify-code' | 'delete-auth';
 
 export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalProps) {
-  const { user, verifyCurrentPassword, updateUserEmail, updateProfile } = useFinanceStore();
+  const { user, verifyCurrentPassword, updateUserEmail, updateProfile, deleteUserAccount } = useFinanceStore();
+  const router = useRouter();
   const [step, setStep] = useState<Step>('view');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,6 +104,15 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
     formState: { errors: errorsProfile }
   } = useForm<UpdateProfileValues>({
     resolver: zodResolver(updateProfileSchema)
+  });
+
+  // 4. Delete Account Form Hook
+  const {
+    register: registerDelete,
+    handleSubmit: handleSubmitDelete,
+    formState: { errors: errorsDelete }
+  } = useForm<{ password: string }>({
+    resolver: zodResolver(verifyDeleteSchema)
   });
 
   useEffect(() => {
@@ -164,6 +179,30 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
     } catch (err) {
       console.error(err);
       setError('An error occurred during verification.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onDeleteSubmit = async (values: { password: string }) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const isValid = await verifyCurrentPassword(values.password);
+      if (isValid) {
+        const success = await deleteUserAccount();
+        if (success) {
+          onSuccess();
+          router.push('/');
+        } else {
+          setError('Failed to delete user account.');
+        }
+      } else {
+        setError('Incorrect password. Please try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('An error occurred during account deletion.');
     } finally {
       setLoading(false);
     }
@@ -317,11 +356,11 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
                 <span className="text-sm font-bold text-neutral-200 truncate mt-0.5">{user?.email || 'demo@finance.io'}</span>
               </div>
               
-              {!user?.is_oauth ? (
+              {!user?.is_oauth || user?.has_password ? (
                 <button
                   type="button"
                   onClick={handleStartEmailChange}
-                  className="h-8 px-3.5 rounded-lg border border-neutral-800 hover:bg-neutral-850 text-indigo-400 hover:text-indigo-300 text-xs font-bold transition-all cursor-pointer shrink-0"
+                  className="h-8 px-3.5 rounded-lg border border-neutral-800 hover:bg-neutral-855 text-indigo-400 hover:text-indigo-300 text-xs font-bold transition-all cursor-pointer shrink-0"
                 >
                   Change
                 </button>
@@ -333,23 +372,39 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
             </div>
           </div>
 
-          <DialogFooter className="pt-2 flex sm:justify-between gap-2">
-            <button
-              onClick={() => {
-                setError(null);
-                setStep('edit-profile');
-              }}
-              className="flex-grow h-10 rounded-xl bg-indigo-600 hover:bg-indigo-550 border border-indigo-550 text-white text-xs font-bold transition-colors cursor-pointer"
-            >
-              Edit Profile
-            </button>
-            <button
-              onClick={onSuccess}
-              className="flex-grow h-10 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 text-neutral-200 text-xs font-bold transition-colors cursor-pointer"
-            >
-              Close
-            </button>
-          </DialogFooter>
+          <div className="flex flex-col gap-3.5 pt-2">
+            <DialogFooter className="flex sm:justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setStep('edit-profile');
+                }}
+                className="flex-grow h-10 rounded-xl bg-indigo-600 hover:bg-indigo-550 border border-indigo-550 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Edit Profile
+              </button>
+              <button
+                type="button"
+                onClick={onSuccess}
+                className="flex-grow h-10 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 text-neutral-200 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </DialogFooter>
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setStep('delete-auth');
+                }}
+                className="text-[11px] text-rose-500 hover:text-rose-400 font-bold tracking-wide transition-colors cursor-pointer select-none hover:underline"
+              >
+                Delete User Account & Data
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -612,6 +667,66 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
                   <ShieldCheck className="h-4 w-4" />
                   <span>{isDemoMode() ? 'Verify & Update' : 'Got it, Close'}</span>
                 </>
+              )}
+            </button>
+          </DialogFooter>
+        </form>
+      )}
+
+      {/* STEP: Delete Account Authentication & Confirmation */}
+      {step === 'delete-auth' && (
+        <form onSubmit={handleSubmitDelete(onDeleteSubmit)} className="space-y-4 py-3 text-left">
+          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-450 leading-relaxed space-y-1.5 animate-in fade-in duration-200">
+            <div className="font-bold flex items-center gap-1.5 text-rose-400">
+              <AlertCircle className="h-4.5 w-4.5" />
+              <span>Warning: Permanent Action</span>
+            </div>
+            <p className="font-normal text-[11px] leading-normal text-rose-350">
+              Closing your account is permanent and cannot be undone. All your financial assets, transactions, bills, and settings will be permanently erased.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-neutral-500">Confirm with Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter password to confirm"
+                className="h-10.5 w-full pl-9 pr-10 rounded-xl bg-neutral-955 border border-neutral-850 focus:border-rose-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
+                {...registerDelete('password')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
+              >
+                {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+              </button>
+            </div>
+            {errorsDelete.password && (
+              <p className="text-[11px] text-rose-500 mt-1">{errorsDelete.password.message}</p>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 sm:justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setStep('view')}
+              disabled={loading}
+              className="h-10 px-4 text-xs font-bold rounded-lg border border-neutral-850 hover:bg-neutral-800 text-neutral-400 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="h-10 px-4 text-xs font-bold rounded-lg bg-rose-600 hover:bg-rose-550 active:scale-98 text-white transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {loading ? (
+                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <span>Permanently Delete Account</span>
               )}
             </button>
           </DialogFooter>

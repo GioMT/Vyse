@@ -185,6 +185,17 @@ after insert on auth.users
 for each row execute function public.handle_new_user();
 
 
+-- C. RPC function for a user to delete their own account
+create or replace function public.delete_own_user()
+returns void
+security definer set search_path = public
+as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$ language plpgsql;
+
+
 -- 4. Seed Global Default Categories (user_id is NULL)
 
 insert into public.categories (name, type, color, icon)

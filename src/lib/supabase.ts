@@ -45,6 +45,7 @@ export const auth = {
     const isOAuth = user.app_metadata?.provider !== 'email' || 
                     (user.identities && user.identities.some(id => id.provider !== 'email')) || 
                     false;
+    const hasPassword = !isOAuth || !!user.user_metadata?.has_password;
 
     return {
       id: user.id,
@@ -55,6 +56,7 @@ export const auth = {
       sex: profile?.sex || user.user_metadata?.sex,
       onboarded: profile?.onboarded ?? user.user_metadata?.onboarded ?? false,
       is_oauth: isOAuth,
+      has_password: hasPassword,
       created_at: profile?.created_at || user.created_at
     };
   },
@@ -213,9 +215,12 @@ export const auth = {
     }
   },
 
-  async updateProfile(fullName: string, dob: string, sex: string, onboarded?: boolean, currency?: string): Promise<{ success: boolean; profile?: Profile; error?: string }> {
+  async updateProfile(fullName: string, dob: string, sex: string, onboarded?: boolean, currency?: string, password?: string): Promise<{ success: boolean; profile?: Profile; error?: string }> {
     if (isDemoMode()) {
       const profile = MockDatabase.updateProfile(fullName, dob, sex, onboarded, currency);
+      if (profile && password) {
+        MockDatabase.updatePassword(password);
+      }
       if (profile) {
         return { success: true, profile };
       }
@@ -227,7 +232,7 @@ export const auth = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: 'Not authenticated' };
     
-    const { error: metaError } = await supabase.auth.updateUser({
+    const updateData: any = {
       data: {
         full_name: fullName,
         dob,
@@ -235,7 +240,12 @@ export const auth = {
         onboarded: onboarded !== undefined ? onboarded : user.user_metadata?.onboarded,
         currency: currency !== undefined ? currency : user.user_metadata?.currency
       }
-    });
+    };
+    if (password) {
+      updateData.password = password;
+      updateData.data.has_password = true;
+    }
+    const { error: metaError } = await supabase.auth.updateUser(updateData);
     if (metaError) return { success: false, error: metaError.message };
     
     const { data: profile, error } = await supabase
@@ -262,12 +272,19 @@ export const auth = {
           sex,
           onboarded: onboarded ?? true,
           currency: currency || user.user_metadata?.currency || 'PHP',
+          has_password: password ? true : (user.user_metadata?.has_password || false),
           created_at: user.created_at
         } 
       };
     }
     
-    return { success: true, profile };
+    return { 
+      success: true, 
+      profile: {
+        ...profile,
+        has_password: password ? true : (user.user_metadata?.has_password || false)
+      } 
+    };
   }
 };
 
