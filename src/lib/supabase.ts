@@ -6,14 +6,21 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 // Determine if we are running in Demo/Mock mode
 export const isDemoMode = (): boolean => {
-  // If the keys are missing, we fall back to Local Storage Demo mode
-  return !supabaseUrl || !supabaseAnonKey;
+  // If the keys are missing or invalid, we fall back to Local Storage Demo mode
+  return (
+    !supabaseUrl ||
+    !supabaseUrl.startsWith('http') ||
+    !supabaseAnonKey ||
+    supabaseUrl.includes('placeholder') ||
+    supabaseUrl.includes('your-')
+  );
 };
 
-// Create real Supabase client only if keys are present
+// Create real Supabase client only if keys are present and valid
 export const supabase = !isDemoMode() 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
+
 
 // Auth Actions
 export const auth = {

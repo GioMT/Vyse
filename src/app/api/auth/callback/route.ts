@@ -13,7 +13,9 @@ export async function GET(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-    if (supabaseUrl && supabaseAnonKey) {
+    const isUrlValid = supabaseUrl && supabaseUrl.startsWith('http') && !supabaseUrl.includes('placeholder') && !supabaseUrl.includes('your-');
+
+    if (isUrlValid && supabaseAnonKey) {
       const supabase = createServerClient(
         supabaseUrl,
         supabaseAnonKey,
