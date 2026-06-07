@@ -38,7 +38,7 @@ const verifyPasswordSchema = z.object({
 });
 
 const verifyDeleteSchema = z.object({
-  password: z.string().min(1, { message: 'Password is required' }),
+  password: z.string().optional(),
 });
 
 const newEmailSchema = z.object({
@@ -67,6 +67,7 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
   
   // Stored values during the wizard
   const [newEmailInput, setNewEmailInput] = useState('');
@@ -111,7 +112,7 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
     register: registerDelete,
     handleSubmit: handleSubmitDelete,
     formState: { errors: errorsDelete }
-  } = useForm<{ password: string }>({
+  } = useForm<{ password?: string }>({
     resolver: zodResolver(verifyDeleteSchema)
   });
 
@@ -184,21 +185,31 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
     }
   };
 
-  const onDeleteSubmit = async (values: { password: string }) => {
+  const onDeleteSubmit = async (values: { password?: string }) => {
     setLoading(true);
     setError(null);
     try {
-      const isValid = await verifyCurrentPassword(values.password);
-      if (isValid) {
-        const success = await deleteUserAccount();
-        if (success) {
-          onSuccess();
-          router.push('/');
-        } else {
-          setError('Failed to delete user account.');
+      if (user?.has_password) {
+        const isValid = await verifyCurrentPassword(values.password || '');
+        if (!isValid) {
+          setError('Incorrect password. Please try again.');
+          setLoading(false);
+          return;
         }
       } else {
-        setError('Incorrect password. Please try again.');
+        if (deleteConfirmationInput.toLowerCase().trim() !== user?.email.toLowerCase().trim()) {
+          setError('The entered email does not match your account email.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      const success = await deleteUserAccount();
+      if (success) {
+        onSuccess();
+        router.push('/');
+      } else {
+        setError('Failed to delete user account.');
       }
     } catch (err) {
       console.error(err);
@@ -686,28 +697,46 @@ export default function AccountDetailsModal({ onSuccess }: AccountDetailsModalPr
             </p>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-neutral-500">Confirm with Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter password to confirm"
-                className="h-10.5 w-full pl-9 pr-10 rounded-xl bg-neutral-955 border border-neutral-850 focus:border-rose-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
-                {...registerDelete('password')}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
-              >
-                {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-              </button>
+          {user?.has_password ? (
+            <div className="space-y-1.5 animate-in fade-in duration-150">
+              <label className="text-xs font-semibold text-neutral-500">Confirm with Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter password to confirm"
+                  className="h-10.5 w-full pl-9 pr-10 rounded-xl bg-neutral-955 border border-neutral-850 focus:border-rose-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
+                  {...registerDelete('password')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
+                >
+                  {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                </button>
+              </div>
+              {errorsDelete.password && (
+                <p className="text-[11px] text-rose-500 mt-1">{errorsDelete.password.message}</p>
+              )}
             </div>
-            {errorsDelete.password && (
-              <p className="text-[11px] text-rose-500 mt-1">{errorsDelete.password.message}</p>
-            )}
-          </div>
+          ) : (
+            <div className="space-y-1.5 text-left animate-in fade-in duration-150">
+              <label className="text-xs font-semibold text-neutral-500 block">
+                Type your email to confirm deletion: <span className="text-neutral-200 font-bold select-all">{user?.email}</span>
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+                <input
+                  type="text"
+                  placeholder="Type email address"
+                  value={deleteConfirmationInput}
+                  onChange={(e) => setDeleteConfirmationInput(e.target.value)}
+                  className="h-10.5 w-full pl-9 pr-3.5 rounded-xl bg-neutral-955 border border-neutral-855 focus:border-rose-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
+                />
+              </div>
+            </div>
+          )}
 
           <DialogFooter className="pt-2 sm:justify-end gap-2">
             <button
