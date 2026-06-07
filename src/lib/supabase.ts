@@ -18,7 +18,11 @@ export const isDemoMode = (): boolean => {
 
 // Create real Supabase client only if keys are present and valid
 export const supabase = !isDemoMode() 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        flowType: 'pkce',
+      },
+    }) 
   : null;
 
 
