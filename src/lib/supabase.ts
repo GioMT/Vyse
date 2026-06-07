@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 import { MockDatabase, Profile, Account, Category, Transaction, RecurringBill, Loan } from './db-mock';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -17,12 +17,10 @@ export const isDemoMode = (): boolean => {
 };
 
 // Create real Supabase client only if keys are present and valid
+// Using createBrowserClient from @supabase/ssr to store PKCE code verifier in cookies
+// so the server-side callback route can read it during token exchange
 export const supabase = !isDemoMode() 
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        flowType: 'pkce',
-      },
-    }) 
+  ? createBrowserClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 
