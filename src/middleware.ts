@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+function getRedirectUrl(request: NextRequest, path: string) {
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || new URL(request.url).host;
+  const proto = request.headers.get('x-forwarded-proto') || 'https';
+  const cleanHost = host.split(',')[0].trim();
+  const cleanProto = proto.split(',')[0].trim();
+  return new URL(path, `${cleanProto}://${cleanHost}`);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -23,7 +31,7 @@ export function middleware(request: NextRequest) {
   const isAuthenticated = hasSupabaseCookie || hasDemoCookie;
 
   if (!isAuthenticated) {
-    const loginUrl = new URL('/', request.url);
+    const loginUrl = getRedirectUrl(request, '/');
     return NextResponse.redirect(loginUrl);
   }
 

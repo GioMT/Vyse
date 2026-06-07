@@ -3,6 +3,14 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+function getRedirectUrl(request: NextRequest, path: string) {
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || new URL(request.url).host;
+  const proto = request.headers.get('x-forwarded-proto') || 'https';
+  const cleanHost = host.split(',')[0].trim();
+  const cleanProto = proto.split(',')[0].trim();
+  return new URL(path, `${cleanProto}://${cleanHost}`);
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -12,7 +20,7 @@ export async function GET(request: NextRequest) {
   const errorParam = requestUrl.searchParams.get('error');
   const errorDesc = requestUrl.searchParams.get('error_description');
   if (errorParam) {
-    const errorUrl = new URL('/', request.url);
+    const errorUrl = getRedirectUrl(request, '/');
     errorUrl.searchParams.set('error', errorParam);
     if (errorDesc) errorUrl.searchParams.set('error_description', errorDesc);
     return NextResponse.redirect(errorUrl);
@@ -47,7 +55,7 @@ export async function GET(request: NextRequest) {
       try {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (!error) {
-          const response = NextResponse.redirect(new URL(next, request.url));
+          const response = NextResponse.redirect(getRedirectUrl(request, next));
           
           // Set active session cookie for middleware parity
           response.cookies.set('pt_session_active', 'true', {
@@ -60,13 +68,13 @@ export async function GET(request: NextRequest) {
         }
         // Token exchange failed — redirect home with error
         console.error('Auth callback: exchangeCodeForSession error:', error.message);
-        const failUrl = new URL('/', request.url);
+        const failUrl = getRedirectUrl(request, '/');
         failUrl.searchParams.set('error', 'auth_callback_failed');
         failUrl.searchParams.set('error_description', error.message);
         return NextResponse.redirect(failUrl);
       } catch (e) {
         console.error('Auth callback error during token exchange:', e);
-        const failUrl = new URL('/', request.url);
+        const failUrl = getRedirectUrl(request, '/');
         failUrl.searchParams.set('error', 'auth_callback_exception');
         failUrl.searchParams.set('error_description', e instanceof Error ? e.message : 'Unknown error during authentication');
         return NextResponse.redirect(failUrl);
@@ -74,7 +82,7 @@ export async function GET(request: NextRequest) {
     } else {
       // Supabase not configured
       console.error('Auth callback: Supabase URL or key invalid/missing');
-      const failUrl = new URL('/', request.url);
+      const failUrl = getRedirectUrl(request, '/');
       failUrl.searchParams.set('error', 'config_error');
       failUrl.searchParams.set('error_description', 'Supabase configuration is missing or invalid');
       return NextResponse.redirect(failUrl);
@@ -82,7 +90,7 @@ export async function GET(request: NextRequest) {
   }
 
   // No code parameter — redirect to home
-  const homeUrl = new URL('/', request.url);
+  const homeUrl = getRedirectUrl(request, '/');
   homeUrl.searchParams.set('error', 'missing_code');
   homeUrl.searchParams.set('error_description', 'No authorization code received from provider');
   return NextResponse.redirect(homeUrl);
