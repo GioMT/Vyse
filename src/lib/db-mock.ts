@@ -13,6 +13,10 @@ export const obfuscate = (str: string): string => {
 
 export const deobfuscate = (str: string): string => {
   if (!str) return '';
+  // If the string consists purely of digits, it's a raw account number, do not decode.
+  if (/^\d+$/.test(str)) {
+    return str;
+  }
   try {
     return atob(str);
   } catch {

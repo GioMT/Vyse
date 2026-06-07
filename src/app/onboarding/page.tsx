@@ -74,6 +74,7 @@ export default function OnboardingPage() {
 
   // Dialog state for Account Form
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<any>(null);
 
   useEffect(() => {
     fetchUser().then((currentUser) => {
@@ -211,7 +212,9 @@ export default function OnboardingPage() {
       </header>
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 flex flex-col justify-center items-center px-6 py-12 w-full max-w-4xl mx-auto">
+      <main className={`relative z-10 flex-1 flex flex-col justify-center items-center px-6 py-12 w-full mx-auto transition-all duration-300 ${
+        step === 2 ? 'max-w-6xl' : 'max-w-4xl'
+      }`}>
         
         {/* Step Stepper Header */}
         <div className="flex items-center gap-2 mb-8 w-full max-w-lg">
@@ -487,16 +490,27 @@ export default function OnboardingPage() {
                   <p className="text-[10px] text-neutral-550 mt-0.5">Linked accounts currently configuring in real-time</p>
                 </div>
 
-                <Dialog open={accountDialogOpen} onOpenChange={setAccountDialogOpen}>
+                <Dialog open={accountDialogOpen} onOpenChange={(open) => {
+                  setAccountDialogOpen(open);
+                  if (!open) {
+                    setEditingAccount(null);
+                  }
+                }}>
                   <DialogTrigger
                     render={
-                      <button className="h-9 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-95 text-white text-xs font-bold transition-all duration-150 flex items-center gap-1.5 cursor-pointer">
+                      <button 
+                        onClick={() => {
+                          setEditingAccount(null);
+                          setAccountDialogOpen(true);
+                        }}
+                        className="h-9 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-95 text-white text-xs font-bold transition-all duration-150 flex items-center gap-1.5 cursor-pointer"
+                      >
                         <Plus className="h-4 w-4" />
                         <span>Link Account</span>
                       </button>
                     }
                   />
-                  <AccountForm onSuccess={() => setAccountDialogOpen(false)} />
+                  <AccountForm account={editingAccount || undefined} onSuccess={() => setAccountDialogOpen(false)} />
                 </Dialog>
               </div>
 
@@ -510,7 +524,10 @@ export default function OnboardingPage() {
                           id={acc.id}
                           name={acc.name}
                           balance={acc.balance}
-                          onEdit={() => {}}
+                          onEdit={() => {
+                            setEditingAccount(acc);
+                            setAccountDialogOpen(true);
+                          }}
                         />
                       );
                     } else {
@@ -524,7 +541,10 @@ export default function OnboardingPage() {
                           color={acc.color}
                           userName={`${firstName} ${lastName}`.trim()}
                           accountNumber={acc.account_number}
-                          onEdit={() => {}}
+                          onEdit={() => {
+                            setEditingAccount(acc);
+                            setAccountDialogOpen(true);
+                          }}
                         />
                       );
                     }
