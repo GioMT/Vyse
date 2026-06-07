@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { formatCurrency, getCurrencySymbol } from '@/lib/format';
 import { useConfirm } from '@/components/ui/confirmation-provider';
 import { Account, deobfuscate } from '@/lib/db-mock';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Trash2, Eye, EyeOff } from 'lucide-react';
 
 const accountSchema = z.object({
   name: z.string().min(1, { message: 'Account name is required' }),
@@ -35,9 +35,16 @@ interface AccountFormProps {
 }
 
 export default function AccountForm({ onSuccess, account }: AccountFormProps) {
-  const { addAccount, updateAccount, isTourActive } = useFinanceStore();
+  const { addAccount, updateAccount, deleteAccount, verifyCurrentPassword, isTourActive } = useFinanceStore();
   const [error, setError] = React.useState<string | null>(null);
   const isEdit = !!account;
+
+  // Delete flow states
+  const [showDeleteSection, setShowDeleteSection] = React.useState(false);
+  const [deletePassword, setDeletePassword] = React.useState('');
+  const [showDeletePassword, setShowDeletePassword] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
 
   const {
     register,
@@ -77,6 +84,10 @@ export default function AccountForm({ onSuccess, account }: AccountFormProps) {
         accountNumber: ''
       });
     }
+    // Reset delete state when account changes
+    setShowDeleteSection(false);
+    setDeletePassword('');
+    setDeleteError(null);
   }, [account, reset]);
 
   const confirm = useConfirm();
@@ -122,6 +133,50 @@ export default function AccountForm({ onSuccess, account }: AccountFormProps) {
     } catch (e) {
       console.error('Error submitting account form:', e);
       setError('An unexpected error occurred while saving the account.');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!account) return;
+    if (!deletePassword) {
+      setDeleteError('Please enter your password to confirm deletion.');
+      return;
+    }
+    
+    setDeleting(true);
+    setDeleteError(null);
+    
+    try {
+      const verified = await verifyCurrentPassword(deletePassword);
+      if (!verified) {
+        setDeleteError('Incorrect password. Please try again.');
+        setDeleting(false);
+        return;
+      }
+
+      const confirmed = await confirm({
+        title: 'Permanently Delete Account',
+        message: `This will permanently delete "${account.name}" and ALL associated transactions. This action cannot be undone.`,
+        confirmText: 'Delete Permanently',
+        cancelText: 'Cancel',
+        type: 'danger'
+      });
+      if (!confirmed) {
+        setDeleting(false);
+        return;
+      }
+
+      const success = await deleteAccount(account.id);
+      if (success) {
+        onSuccess();
+      } else {
+        setDeleteError('Failed to delete the account. Please try again.');
+      }
+    } catch (e) {
+      console.error('Error deleting account:', e);
+      setDeleteError('An unexpected error occurred.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -235,7 +290,18 @@ export default function AccountForm({ onSuccess, account }: AccountFormProps) {
         </div>
 
         {/* Form Actions */}
-        <DialogFooter className="pt-2 sm:justify-end gap-2">
+        <DialogFooter className="pt-2 sm:justify-between gap-2">
+          {/* Delete Button (only in edit mode) */}
+          {isEdit && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteSection(!showDeleteSection)}
+              className="h-10 px-3 text-xs font-bold rounded-lg border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
           <button
             type="submit"
             disabled={isSubmitting || isTourActive}
@@ -250,6 +316,61 @@ export default function AccountForm({ onSuccess, account }: AccountFormProps) {
           </button>
         </DialogFooter>
       </form>
+
+      {/* Delete Account Section with Password Auth */}
+      {isEdit && showDeleteSection && (
+        <div className="border-t border-neutral-850 pt-4 mt-1 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="space-y-1">
+            <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wider block">Danger Zone</span>
+            <p className="text-[10px] text-neutral-500 leading-normal">
+              Enter your password to permanently delete &quot;{account?.name}&quot; and all its transactions. This action is irreversible.
+            </p>
+          </div>
+
+          {deleteError && (
+            <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-400 flex items-start gap-2 animate-in fade-in duration-200">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>{deleteError}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-neutral-500">Confirm Password</label>
+            <div className="relative">
+              <input
+                type={showDeletePassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                className="h-10 w-full px-3.5 pr-12 rounded-lg bg-neutral-950 border border-neutral-800 focus:border-rose-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-600 transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowDeletePassword(!showDeletePassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer"
+              >
+                {showDeletePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            disabled={deleting || !deletePassword}
+            className="w-full h-9 rounded-lg bg-rose-600 hover:bg-rose-550 text-white text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
+          >
+            {deleting ? (
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete Account Permanently</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </DialogContent>
   );
 }

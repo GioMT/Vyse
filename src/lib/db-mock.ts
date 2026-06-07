@@ -424,7 +424,11 @@ export class MockDatabase {
   private static initUserStores(userId: string) {
     const accs = this.getStorageItem<Account[]>(`pt_accounts_${userId}`, []);
     if (accs.length === 0) {
-      if (userId === 'demo-user-id') {
+      // Only populate default demo data for the demo-user-id AND when user is already onboarded.
+      // During onboarding, users should start with empty accounts.
+      const sessionUser = this.getSessionUser();
+      const isOnboarded = sessionUser?.onboarded === true;
+      if (userId === 'demo-user-id' && isOnboarded) {
         this.setStorageItem(`pt_accounts_${userId}`, DEFAULT_ACCOUNTS(userId));
         this.setStorageItem(`pt_transactions_${userId}`, DEFAULT_TRANSACTIONS(userId));
         this.setStorageItem(`pt_bills_${userId}`, DEFAULT_BILLS(userId));
@@ -485,6 +489,22 @@ export class MockDatabase {
       color,
       account_number: accountNumber !== undefined ? (accountNumber ? obfuscate(accountNumber) : '') : accounts[idx].account_number
     };
+    this.saveAccounts(accounts);
+    return true;
+  }
+
+  static deleteAccount(id: string): boolean {
+    const accounts = this.getAccounts();
+    const idx = accounts.findIndex(a => a.id === id);
+    if (idx === -1) return false;
+
+    // Remove all transactions for this account
+    const txs = this.getTransactions();
+    const filteredTxs = txs.filter(t => t.account_id !== id);
+    this.saveTransactions(filteredTxs);
+
+    // Remove the account
+    accounts.splice(idx, 1);
     this.saveAccounts(accounts);
     return true;
   }

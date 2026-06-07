@@ -71,6 +71,26 @@ function getNextPaymentSchedule(loan: Loan, transactions: Transaction[], today: 
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
 
+  // Parse the loan start date
+  const loanStartDate = parseLocalDate(loan.start_date);
+  const loanStartMidnight = new Date(loanStartDate.getFullYear(), loanStartDate.getMonth(), loanStartDate.getDate());
+
+  // If today is before the loan start date, the first payment is not yet due
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (todayMidnight.getTime() < loanStartMidnight.getTime()) {
+    // Return the first scheduled payment date (on or after start date)
+    const firstDay = loan.first_payment_day || 1;
+    let firstPaymentDate = new Date(loanStartDate.getFullYear(), loanStartDate.getMonth(), firstDay);
+    // If the first payment day is before the start date's day, move to next month
+    if (firstPaymentDate.getTime() < loanStartMidnight.getTime()) {
+      firstPaymentDate = new Date(loanStartDate.getFullYear(), loanStartDate.getMonth() + 1, firstDay);
+    }
+    return {
+      date: firstPaymentDate,
+      isPastDue: false,
+    };
+  }
+
   // Generate candidate dates from 3 months ago to 6 months in the future
   let allSchedules: Date[] = [];
   for (let offset = -3; offset <= 6; offset++) {
@@ -82,11 +102,20 @@ function getNextPaymentSchedule(loan: Loan, transactions: Transaction[], today: 
     );
   }
 
+  // Filter out schedule dates that are before the loan start date
+  allSchedules = allSchedules.filter(d => {
+    const dMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return dMidnight.getTime() >= loanStartMidnight.getTime();
+  });
+
   // Sort chronologically
   allSchedules.sort((a, b) => a.getTime() - b.getTime());
 
+  if (allSchedules.length === 0) {
+    return { date: new Date(), isPastDue: false };
+  }
+
   // Find S_0: the last scheduled date that is <= today
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   let s0Idx = 0;
   for (let i = 0; i < allSchedules.length; i++) {
     const sDate = new Date(allSchedules[i].getFullYear(), allSchedules[i].getMonth(), allSchedules[i].getDate());
@@ -159,6 +188,7 @@ export default function LoansPage() {
   const [includeLateCharge, setIncludeLateCharge] = useState(false);
   const [lateChargeAmount, setLateChargeAmount] = useState('');
   const [comment, setComment] = useState('');
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   React.useEffect(() => {
     const defaultAcc = accounts.find(a => a.type === 'checking') || accounts[0];
@@ -190,23 +220,42 @@ export default function LoansPage() {
 
   const handleMakePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPaymentError(null);
     if (!selectedLoanId || !selectedAccountId || !paymentAmount) {
-      alert('Please fill out all payment fields.');
+      setPaymentError('Please fill out all payment fields.');
       return;
     }
     const amt = parseFloat(paymentAmount);
     if (isNaN(amt) || amt <= 0) {
-      alert('Please enter a valid positive payment amount.');
+      setPaymentError('Please enter a valid positive payment amount.');
       return;
     }
 
     const fee = includeLateCharge ? parseFloat(lateChargeAmount) : 0;
     if (includeLateCharge && (isNaN(fee) || fee < 0)) {
-      alert('Please enter a valid non-negative additional charge.');
+      setPaymentError('Please enter a valid non-negative additional charge.');
       return;
     }
 
     const totalDeducted = amt + fee;
+    const sourceAccount = accounts.find(a => a.id === selectedAccountId);
+    if (!sourceAccount) {
+      setPaymentError('Selected source account not found.');
+      return;
+    }
+
+    // Check if account has sufficient funds
+    const availableBalance = Math.abs(sourceAccount.balance);
+    if (sourceAccount.type === 'credit') {
+      // Credit cards have negative balances (debt). Paying from credit doesn't make sense for loans.
+      setPaymentError(`Cannot pay from "${sourceAccount.name}" — credit card accounts cannot fund loan payments. Please select a checking, savings, or cash account.`);
+      return;
+    }
+    if (sourceAccount.balance < totalDeducted) {
+      setPaymentError(`Insufficient funds in "${sourceAccount.name}". Available balance: ${formatCurrency(sourceAccount.balance)}. Required: ${formatCurrency(totalDeducted)}.`);
+      return;
+    }
+
     const loanName = loans.find(l => l.id === selectedLoanId)?.name || 'selected loan';
 
     const confirmed = await confirm({
@@ -232,10 +281,14 @@ export default function LoansPage() {
         setLateChargeAmount('');
         setComment('');
         setIncludeLateCharge(false);
+        setPaymentError(null);
         alert('Payment successfully credited to loan and logged in ledger!');
+      } else {
+        setPaymentError('Payment failed. Please try again.');
       }
     } catch (err) {
       console.error(err);
+      setPaymentError('An unexpected error occurred while processing the payment.');
     } finally {
       setSubmitting(false);
     }
@@ -396,6 +449,13 @@ export default function LoansPage() {
             </div>
 
             <form onSubmit={handleMakePayment} className="mt-5 space-y-4">
+              {/* Payment Error Message */}
+              {paymentError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 flex items-start gap-2 animate-in fade-in duration-200">
+                  <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{paymentError}</span>
+                </div>
+              )}
               {/* Select Loan */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-neutral-500">Select Loan</label>

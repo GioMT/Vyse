@@ -111,8 +111,11 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
     }
   }, [accounts, setValue]);
 
+  const [formError, setFormError] = React.useState<string | null>(null);
+
   const onSubmit = async (values: TransactionFormValues) => {
     try {
+      setFormError(null);
       const confirmed = await confirm({
         title: 'Confirm New Transaction',
         message: `Are you sure you want to log this ${values.type} of ${formatCurrency(values.amount)} for "${values.description}"?`,
@@ -120,6 +123,16 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
         type: 'info'
       });
       if (!confirmed) return;
+
+      // Check if source account has sufficient funds for expenses/transfers
+      const sourceAcc = accounts.find(a => a.id === values.accountId);
+      if (sourceAcc && values.type !== 'income') {
+        const totalDeduction = values.amount + (typeof values.additionalCharge === 'number' ? values.additionalCharge : 0);
+        if (sourceAcc.type !== 'credit' && sourceAcc.balance < totalDeduction) {
+          setFormError(`Insufficient funds in "${sourceAcc.name}". Available: ${formatCurrency(sourceAcc.balance)}, Required: ${formatCurrency(totalDeduction)}.`);
+          return;
+        }
+      }
 
       const success = await addTransaction({
         accountId: values.accountId,
@@ -143,9 +156,12 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           additionalCharge: undefined
         });
         onSuccess();
+      } else {
+        setFormError('Failed to save transaction. Please verify the form data and try again.');
       }
     } catch (e) {
       console.error('Error submitting transaction:', e);
+      setFormError('An unexpected error occurred while saving the transaction.');
     }
   };
 
@@ -161,6 +177,13 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       </DialogHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-3">
+        {/* Error Message */}
+        {formError && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 flex items-start gap-2 animate-in fade-in duration-200">
+            <Info className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{formError}</span>
+          </div>
+        )}
         {/* Transaction Type Segment Controller */}
         <div className="flex rounded-xl bg-neutral-950 p-1 border border-neutral-850">
           <button

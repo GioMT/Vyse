@@ -55,6 +55,7 @@ interface FinanceState {
   
   addAccount: (name: string, type: Account['type'], initialBalance: number, color: string, accountNumber?: string) => Promise<boolean>;
   updateAccount: (id: string, name: string, type: Account['type'], balance: number, color: string, accountNumber?: string) => Promise<boolean>;
+  deleteAccount: (id: string) => Promise<boolean>;
   addTransaction: (data: {
     accountId: string;
     categoryId?: string;
@@ -300,6 +301,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
       if (success) {
         const accs = await db.getAccounts();
         updateStoreState({ accounts: accs });
+        return true;
+      }
+      return false;
+    },
+
+    deleteAccount: async (id) => {
+      if (get().isTourActive) return true;
+      const success = await db.deleteAccount(id);
+      if (success) {
+        const [accs, txs] = await Promise.all([db.getAccounts(), db.getTransactions()]);
+        updateStoreState({ accounts: accs, transactions: txs });
         return true;
       }
       return false;

@@ -261,6 +261,11 @@ export const auth = {
       .select()
       .single();
       
+    const isOAuth = user.app_metadata?.provider !== 'email' || 
+                    (user.identities && user.identities.some(id => id.provider !== 'email')) || 
+                    false;
+    const hasPasswordFlag = password ? true : (user.user_metadata?.has_password || false);
+
     if (error) {
       return { 
         success: true, 
@@ -272,7 +277,8 @@ export const auth = {
           sex,
           onboarded: onboarded ?? true,
           currency: currency || user.user_metadata?.currency || 'PHP',
-          has_password: password ? true : (user.user_metadata?.has_password || false),
+          is_oauth: isOAuth,
+          has_password: hasPasswordFlag,
           created_at: user.created_at
         } 
       };
@@ -282,7 +288,8 @@ export const auth = {
       success: true, 
       profile: {
         ...profile,
-        has_password: password ? true : (user.user_metadata?.has_password || false)
+        is_oauth: isOAuth,
+        has_password: hasPasswordFlag
       } 
     };
   }
@@ -355,6 +362,34 @@ export const db = {
 
     if (error) {
       console.error('Error updating account:', error.message);
+      return false;
+    }
+    return true;
+  },
+
+  async deleteAccount(id: string): Promise<boolean> {
+    if (isDemoMode()) {
+      return MockDatabase.deleteAccount(id);
+    }
+    if (!supabase) return false;
+
+    // Delete all transactions for this account first
+    const { error: txError } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('account_id', id);
+
+    if (txError) {
+      console.error('Error deleting account transactions:', txError.message);
+    }
+
+    const { error } = await supabase
+      .from('accounts')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting account:', error.message);
       return false;
     }
     return true;
@@ -462,6 +497,28 @@ export const db = {
       console.error('Error creating transaction:', error.message);
       return null;
     }
+
+    // Manually update the account balance since there may be no database trigger
+    const balanceChange = txData.type === 'income' ? txData.amount : -txData.amount;
+    const { error: balanceError } = await supabase.rpc('increment_balance', {
+      account_id_input: txData.accountId,
+      amount_input: balanceChange
+    });
+    // Fallback: if the RPC doesn't exist, update directly
+    if (balanceError) {
+      const { data: currentAcc } = await supabase
+        .from('accounts')
+        .select('balance')
+        .eq('id', txData.accountId)
+        .single();
+      if (currentAcc) {
+        await supabase
+          .from('accounts')
+          .update({ balance: currentAcc.balance + balanceChange })
+          .eq('id', txData.accountId);
+      }
+    }
+
     return data;
   },
 
@@ -471,7 +528,13 @@ export const db = {
       return true;
     }
     if (!supabase) return false;
-    
+    // First fetch the transaction to know its balance impact
+    const { data: txToDelete } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', txId)
+      .single();
+
     // Deleting a transaction triggers a postgres trigger to update the account balance
     const { error } = await supabase
       .from('transactions')
@@ -482,6 +545,23 @@ export const db = {
       console.error('Error deleting transaction:', error.message);
       return false;
     }
+
+    // Manually reverse the balance impact
+    if (txToDelete) {
+      const balanceChange = txToDelete.type === 'income' ? -txToDelete.amount : txToDelete.amount;
+      const { data: currentAcc } = await supabase
+        .from('accounts')
+        .select('balance')
+        .eq('id', txToDelete.account_id)
+        .single();
+      if (currentAcc) {
+        await supabase
+          .from('accounts')
+          .update({ balance: currentAcc.balance + balanceChange })
+          .eq('id', txToDelete.account_id);
+      }
+    }
+
     return true;
   },
 

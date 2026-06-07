@@ -96,6 +96,9 @@ export default function OnboardingPage() {
       } else if (currentUser.onboarded === true) {
         router.push('/dashboard');
       } else {
+        // Ensure tour mode is off during onboarding so demo data doesn't leak in
+        localStorage.removeItem('vyse_tour_active');
+
         // Pre-populate fields from signup
         const nameParts = (currentUser.full_name || '').split(' ');
         setFirstName(nameParts[0] || '');
