@@ -31,6 +31,13 @@ export default function TransactionsPage() {
   const confirm = useConfirm();
 
   const [txDialogOpen, setTxDialogOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  React.useEffect(() => {
+    Promise.resolve().then(() => {
+      setMounted(true);
+    });
+  }, []);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [catFilter, setCatFilter] = useState('all');
@@ -90,8 +97,19 @@ export default function TransactionsPage() {
     link.click();
     document.body.removeChild(link);
   };
-
-
+  if (!mounted) {
+    return (
+      <div className="flex-1 p-6 md:p-8 space-y-6 w-full max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-100 sm:text-3xl">Transactions Ledger</h1>
+            <p className="text-xs text-neutral-500 mt-1">Review, filter, and audit your complete financial transaction history.</p>
+          </div>
+        </div>
+        <div className="h-40 w-full rounded-xl bg-neutral-900 border border-neutral-850 animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 p-6 md:p-8 space-y-6 w-full max-w-7xl mx-auto">

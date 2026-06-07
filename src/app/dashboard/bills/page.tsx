@@ -27,6 +27,13 @@ export default function BillsPage() {
 
   const [billDialogOpen, setBillDialogOpen] = useState(false);
   const [payingBillId, setPayingBillId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setMounted(true);
+    });
+  }, []);
 
   // Programmatic event listener to open/close bill modal during product tour
   useEffect(() => {
@@ -90,6 +97,20 @@ export default function BillsPage() {
   const totalBillsAmount = bills.reduce((sum, b) => sum + b.amount, 0);
   const overdueBills = bills.filter(b => getBillStatus(b.next_due_date) === 'overdue');
   const dueSoonBills = bills.filter(b => getBillStatus(b.next_due_date) === 'due-soon');
+
+  if (!mounted) {
+    return (
+      <div className="flex-1 p-6 md:p-8 space-y-6 w-full max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-100 sm:text-3xl">Recurring Bills</h1>
+            <p className="text-xs text-neutral-500 mt-1">Monitor, schedule, and automate your recurring subscriptions and service invoices.</p>
+          </div>
+        </div>
+        <div className="h-40 w-full rounded-xl bg-neutral-900 border border-neutral-850 animate-pulse" />
+      </div>
+    );
+  }
 
 
 

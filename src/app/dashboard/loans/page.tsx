@@ -131,6 +131,13 @@ export default function LoansPage() {
   const confirm = useConfirm();
 
   const [loanDialogOpen, setLoanDialogOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  React.useEffect(() => {
+    Promise.resolve().then(() => {
+      setMounted(true);
+    });
+  }, []);
 
   // Programmatic event listener to open/close loan modal during product tour
   React.useEffect(() => {
@@ -166,6 +173,20 @@ export default function LoansPage() {
   const totalPaid = loans.reduce((sum, l) => sum + l.paid_amount, 0);
   const totalDebt = totalOwed + totalPaid;
   const overallProgress = totalDebt > 0 ? (totalPaid / totalDebt) * 100 : 0;
+
+  if (!mounted) {
+    return (
+      <div className="flex-1 p-6 md:p-8 space-y-6 w-full max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-100 sm:text-3xl">Loans & Debt Tracker</h1>
+            <p className="text-xs text-neutral-500 mt-1">Track loan liabilities, monitor payment schedules, and accelerate debt payoff.</p>
+          </div>
+        </div>
+        <div className="h-40 w-full rounded-xl bg-neutral-900 border border-neutral-850 animate-pulse" />
+      </div>
+    );
+  }
 
   const handleMakePayment = async (e: React.FormEvent) => {
     e.preventDefault();
