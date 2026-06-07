@@ -192,6 +192,13 @@ export default function LinkedAccountsPage() {
   const { user, accounts } = useFinanceStore();
   const [accDialogOpen, setAccDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setMounted(true);
+    });
+  }, []);
 
   // Programmatic event listener to open/close account modal during product tour
   useEffect(() => {
@@ -220,6 +227,20 @@ export default function LinkedAccountsPage() {
     setEditingAccount(null);
     setAccDialogOpen(true);
   };
+
+  if (!mounted) {
+    return (
+      <div className="flex-1 p-6 md:p-8 space-y-6 w-full max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-100 sm:text-3xl">Linked Accounts</h1>
+            <p className="text-xs text-neutral-555 mt-1">Manage checking, savings, physical cash, and credit card portfolio assets.</p>
+          </div>
+        </div>
+        <div className="h-40 w-full rounded-xl bg-neutral-900 border border-neutral-850/50 animate-pulse" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 p-6 md:p-8 space-y-6 w-full max-w-7xl mx-auto">
