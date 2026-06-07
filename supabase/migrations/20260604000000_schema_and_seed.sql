@@ -153,7 +153,9 @@ for each row execute function public.handle_transaction_balance_change();
 
 -- B. Auto-create Profile and Default Accounts on user registration
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+security definer set search_path = public
+as $$
 begin
   insert into public.profiles (id, email, full_name, avatar_url)
   values (

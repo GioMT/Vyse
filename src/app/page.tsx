@@ -1,8 +1,22 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+
+function AuthErrorNotification({ onError }: { onError: (msg: string) => void }) {
+  const searchParams = useSearchParams();
+  
+  useEffect(() => {
+    const error = searchParams.get('error');
+    const desc = searchParams.get('error_description');
+    if (error) {
+      onError(desc ? decodeURIComponent(desc).replace(/\+/g, ' ') : error);
+    }
+  }, [searchParams, onError]);
+
+  return null;
+}
 import { useFinanceStore } from '@/hooks/use-finance-store';
 import { isDemoMode } from '@/lib/supabase';
 import { 
@@ -286,6 +300,9 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col justify-between bg-neutral-950 text-neutral-100 overflow-hidden font-sans">
+      <Suspense fallback={null}>
+        <AuthErrorNotification onError={setError} />
+      </Suspense>
       {/* Dynamic Background Glowing Blobs */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-200/35 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full bg-emerald-200/30 blur-[130px] pointer-events-none" />
