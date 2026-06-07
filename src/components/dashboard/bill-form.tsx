@@ -13,6 +13,8 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format';
+import { useConfirm } from '@/components/ui/confirmation-provider';
 
 const billSchema = z.object({
   name: z.string().min(1, { message: 'Bill name is required' }),
@@ -32,6 +34,7 @@ interface BillFormProps {
 
 export default function BillForm({ onSuccess }: BillFormProps) {
   const { categories, addBill } = useFinanceStore();
+  const confirm = useConfirm();
 
   const {
     register,
@@ -62,6 +65,14 @@ export default function BillForm({ onSuccess }: BillFormProps) {
 
   const onSubmit = async (values: BillFormValues) => {
     try {
+      const confirmed = await confirm({
+        title: 'Confirm Recurring Bill',
+        message: `Are you sure you want to schedule a recurring ${values.frequency} payment of ${formatCurrency(values.amount)} for "${values.name}"?`,
+        confirmText: 'Schedule Bill',
+        type: 'info'
+      });
+      if (!confirmed) return;
+
       const success = await addBill({
         name: values.name,
         amount: values.amount,
@@ -80,7 +91,7 @@ export default function BillForm({ onSuccess }: BillFormProps) {
   };
 
   return (
-    <DialogContent className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
+    <DialogContent id="tour-bill-form" className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
       <DialogHeader>
         <DialogTitle className="text-lg font-bold text-neutral-100">Schedule Recurring Bill</DialogTitle>
         <DialogDescription className="text-xs text-neutral-500">
@@ -105,7 +116,7 @@ export default function BillForm({ onSuccess }: BillFormProps) {
 
         {/* Amount Input */}
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-neutral-500">Bill Amount ($)</label>
+          <label className="text-xs font-semibold text-neutral-500">Bill Amount ({getCurrencySymbol()})</label>
           <Input
             type="number"
             step="0.01"

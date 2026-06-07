@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useFinanceStore } from '@/hooks/use-finance-store';
 import Sidebar from '@/components/sidebar';
+import ProductTour from '@/components/dashboard/product-tour';
+import { HelpCircle } from 'lucide-react';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading, fetchUser, fetchData } = useFinanceStore();
+  const { user, loading, fetchUser, fetchData, isTourActive } = useFinanceStore();
   const router = useRouter();
 
   useEffect(() => {
@@ -20,6 +22,9 @@ export default function DashboardLayout({
       if (!currentUser) {
         // Redirect to login if no session cookie or local storage user is present
         router.push('/');
+      } else if (currentUser.onboarded === false) {
+        // Redirect to onboarding if profile onboarding is incomplete
+        router.push('/onboarding');
       } else {
         // Load database stores
         fetchData();
@@ -58,6 +63,26 @@ export default function DashboardLayout({
         <div className="relative z-10 flex-1 flex flex-col">
           {children}
         </div>
+        <ProductTour />
+
+        {/* Floating Help / Restart Product Tour Button in the corner */}
+        {!isTourActive && (
+          <button
+            onClick={() => {
+              localStorage.setItem('vyse_tour_active', 'true');
+              localStorage.setItem('vyse_tour_step', '-1');
+              window.dispatchEvent(new Event('vyse_start_tour'));
+              router.push('/dashboard');
+            }}
+            className="fixed bottom-6 right-6 h-10 w-10 rounded-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 active:scale-95 text-neutral-400 hover:text-neutral-200 flex items-center justify-center cursor-pointer transition-all duration-150 shadow-lg z-40 group"
+            title="Restart Product Tour"
+          >
+            <HelpCircle className="h-5 w-5" />
+            <span className="absolute right-12 bg-neutral-950 border border-neutral-850 px-2.5 py-1 rounded-lg text-xs font-bold text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap shadow-xl z-50">
+              Restart Tour
+            </span>
+          </button>
+        )}
       </main>
     </div>
   );

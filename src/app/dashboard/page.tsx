@@ -1,20 +1,19 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFinanceStore, TimeFilter } from '@/hooks/use-finance-store';
 import StatsCards from '@/components/dashboard/stats-cards';
 import Charts from '@/components/dashboard/charts';
+import ProductTour from '@/components/dashboard/product-tour';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import TransactionForm from '@/components/dashboard/transaction-form';
 // import AccountForm from '@/components/dashboard/account-form';
-import { formatCurrency } from '@/lib/format';
-import { ACCOUNT_COLOR_CLASSES, CATEGORY_COLOR_CLASSES } from '@/lib/constants';
+import { parseDescription } from '@/lib/format';
+import { CATEGORY_COLOR_CLASSES } from '@/lib/constants';
+import { useConfirm } from '@/components/ui/confirmation-provider';
 import { 
   Plus, 
-  Trash2, 
-  CreditCard, 
-  Landmark, 
-  DollarSign
+  Trash2
 } from 'lucide-react';
 
 export default function DashboardHome() {
@@ -30,8 +29,22 @@ export default function DashboardHome() {
     deleteTransaction
   } = useFinanceStore();
 
+  const confirm = useConfirm();
+
   const [txDialogOpen, setTxDialogOpen] = useState(false);
   // const [accDialogOpen, setAccDialogOpen] = useState(false);
+
+  // Programmatic event listener to open/close transaction modal during product tour
+  useEffect(() => {
+    const handleOpen = () => setTxDialogOpen(true);
+    const handleClose = () => setTxDialogOpen(false);
+    window.addEventListener('vyse_open_add_tx', handleOpen);
+    window.addEventListener('vyse_close_add_tx', handleClose);
+    return () => {
+      window.removeEventListener('vyse_open_add_tx', handleOpen);
+      window.removeEventListener('vyse_close_add_tx', handleClose);
+    };
+  }, []);
 
   // Time Filtering Helper
   const getFilteredTransactions = () => {
@@ -90,7 +103,7 @@ export default function DashboardHome() {
         </div>
 
         {/* Global Filter Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div id="tour-range-filter" className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Range:</span>
             <select
@@ -129,15 +142,19 @@ export default function DashboardHome() {
       </div>
 
       {/* Top Metric Cards */}
-      <StatsCards accounts={accounts} filteredTransactions={filteredTxs} />
+      <div id="tour-stats">
+        <StatsCards accounts={accounts} filteredTransactions={filteredTxs} />
+      </div>
 
       {/* Visual Analytics Charts */}
-      <Charts filteredTransactions={filteredTxs} categories={categories} />
+      <div id="tour-charts">
+        <Charts filteredTransactions={filteredTxs} categories={categories} />
+      </div>
 
       {/* Grid: Recent Transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Side: Recent Ledger */}
-        <div className="lg:col-span-12 rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col justify-between shadow-lg">
+        <div id="tour-transactions" className="lg:col-span-12 rounded-2xl bg-neutral-900 border border-neutral-850 p-6 flex flex-col justify-between shadow-lg">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-neutral-300">Recent Transactions</h3>
@@ -148,7 +165,7 @@ export default function DashboardHome() {
             <Dialog open={txDialogOpen} onOpenChange={setTxDialogOpen}>
               <DialogTrigger
                 render={
-                  <button className="h-9 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-95 text-white text-xs font-bold transition-all duration-150 flex items-center gap-1.5 cursor-pointer">
+                  <button id="tour-add-tx" className="h-9 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-95 text-white text-xs font-bold transition-all duration-150 flex items-center gap-1.5 cursor-pointer">
                     <Plus className="h-4 w-4" />
                     <span>Transaction</span>
                   </button>
@@ -176,6 +193,8 @@ export default function DashboardHome() {
                     const cat = categories.find(c => c.id === tx.category_id);
                     const acc = accounts.find(a => a.id === tx.account_id);
                     const catColor = cat ? CATEGORY_COLOR_CLASSES[cat.color] : 'bg-neutral-800 text-neutral-400';
+                    const { cleanDesc, fee } = parseDescription(tx.description);
+                    const baseAmount = tx.amount - fee;
                     return (
                       <tr key={tx.id} className="hover:bg-neutral-850/30 transition-colors group">
                         <td className="py-3.5 text-neutral-400 hidden sm:table-cell">
@@ -187,19 +206,37 @@ export default function DashboardHome() {
                             hour12: true 
                           })}
                         </td>
-                        <td className="py-3.5 font-medium text-neutral-100">{tx.description}</td>
+                        <td className="py-3.5 font-medium text-neutral-100">{cleanDesc}</td>
                         <td className="py-3.5">
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${catColor}`}>
                             {cat ? cat.name : 'Uncategorized'}
                           </span>
                         </td>
                         <td className="py-3.5 text-neutral-400 hidden md:table-cell">{acc ? acc.name : 'Unknown Account'}</td>
-                        <td className={`py-3.5 text-right font-extrabold ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {tx.type === 'income' ? '+' : '-'}${tx.amount.toFixed(2)}
+                        <td className="py-3.5 text-right">
+                          <div className={`font-extrabold ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {tx.type === 'income' ? '+' : '-'}${baseAmount.toFixed(2)}
+                          </div>
+                          {fee > 0 && (
+                            <div className="text-[10px] text-neutral-500 font-medium">
+                              + ${fee.toFixed(2)} charge
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 text-right">
                           <button
-                            onClick={() => deleteTransaction(tx.id)}
+                            onClick={async () => {
+                              const confirmed = await confirm({
+                                title: 'Delete Transaction',
+                                message: 'Are you sure you want to permanently delete this transaction? This action will adjust your account balance and cannot be undone.',
+                                confirmText: 'Delete',
+                                cancelText: 'Cancel',
+                                type: 'danger'
+                              });
+                              if (confirmed) {
+                                deleteTransaction(tx.id);
+                              }
+                            }}
                             className="p-1 rounded-lg text-neutral-600 hover:text-rose-400 hover:bg-rose-500/5 cursor-pointer opacity-0 group-hover:opacity-100 transition-all duration-150"
                             title="Delete transaction"
                           >

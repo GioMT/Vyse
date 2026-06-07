@@ -14,22 +14,28 @@ import {
   DialogFooter 
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format';
+import { useConfirm } from '@/components/ui/confirmation-provider';
+import { Account, deobfuscate } from '@/lib/db-mock';
 
 const accountSchema = z.object({
   name: z.string().min(1, { message: 'Account name is required' }),
   type: z.enum(['checking', 'savings', 'credit', 'cash']),
-  initialBalance: z.number().min(0, { message: 'Initial balance must be positive' }),
+  initialBalance: z.number(),
   color: z.string().min(1, { message: 'Color is required' }),
+  accountNumber: z.string().regex(/^\d*$/, { message: 'Account number must contain only numbers' }).optional(),
 });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
 
 interface AccountFormProps {
   onSuccess: () => void;
+  account?: Account;
 }
 
-export default function AccountForm({ onSuccess }: AccountFormProps) {
-  const { addAccount } = useFinanceStore();
+export default function AccountForm({ onSuccess, account }: AccountFormProps) {
+  const { addAccount, updateAccount } = useFinanceStore();
+  const isEdit = !!account;
 
   const {
     register,
@@ -41,40 +47,88 @@ export default function AccountForm({ onSuccess }: AccountFormProps) {
   } = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
     defaultValues: {
-      name: '',
-      type: 'checking',
-      initialBalance: 0,
-      color: 'blue'
+      name: account?.name || '',
+      type: account?.type || 'checking',
+      initialBalance: account?.balance || 0,
+      color: account?.color || 'blue',
+      accountNumber: account?.account_number ? deobfuscate(account.account_number) : ''
     }
   });
 
   const selectedColor = watch('color');
 
+  React.useEffect(() => {
+    if (account) {
+      reset({
+        name: account.name,
+        type: account.type,
+        initialBalance: account.balance,
+        color: account.color,
+        accountNumber: account.account_number ? deobfuscate(account.account_number) : ''
+      });
+    } else {
+      reset({
+        name: '',
+        type: 'checking',
+        initialBalance: 0,
+        color: 'blue',
+        accountNumber: ''
+      });
+    }
+  }, [account, reset]);
+
+  const confirm = useConfirm();
+
   const onSubmit = async (values: AccountFormValues) => {
     try {
-      const success = await addAccount(
-        values.name,
-        values.type,
-        values.initialBalance,
-        values.color
-      );
+      const confirmed = await confirm({
+        title: isEdit ? 'Confirm Save Changes' : 'Confirm New Account',
+        message: isEdit 
+          ? `Are you sure you want to save updates to the account "${values.name}"?`
+          : `Are you sure you want to create the account "${values.name}" with an initial balance of ${formatCurrency(values.initialBalance)}?`,
+        confirmText: isEdit ? 'Save Changes' : 'Create Account',
+        type: 'info'
+      });
+      if (!confirmed) return;
+
+      let success = false;
+      if (isEdit && account) {
+        success = await updateAccount(
+          account.id,
+          values.name,
+          values.type,
+          account.balance,
+          values.color,
+          values.accountNumber
+        );
+      } else {
+        success = await addAccount(
+          values.name,
+          values.type,
+          values.initialBalance,
+          values.color,
+          values.accountNumber
+        );
+      }
       if (success) {
         reset();
         onSuccess();
       }
     } catch (e) {
-      console.error('Error adding account:', e);
+      console.error('Error submitting account form:', e);
     }
   };
 
-
-
   return (
-    <DialogContent className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
+    <DialogContent id="tour-account-form" className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
       <DialogHeader>
-        <DialogTitle className="text-lg font-bold text-neutral-100">Add Financial Account</DialogTitle>
+        <DialogTitle className="text-lg font-bold text-neutral-100">
+          {isEdit ? 'Edit Account' : 'Add Financial Account'}
+        </DialogTitle>
         <DialogDescription className="text-xs text-neutral-500">
-          Create a checking, savings, cash, or credit account to track your money at hand.
+          {isEdit 
+            ? 'Update your account details and balance.' 
+            : 'Create a checking, savings, cash, or credit account to track your money at hand.'}
         </DialogDescription>
       </DialogHeader>
 
@@ -110,18 +164,39 @@ export default function AccountForm({ onSuccess }: AccountFormProps) {
           )}
         </div>
 
-        {/* Initial Balance */}
+        {/* Balance Input */}
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-neutral-500">Initial Balance ($)</label>
+          <label className="text-xs font-semibold text-neutral-500">
+            {isEdit ? `Current Balance (${getCurrencySymbol()})` : `Initial Balance (${getCurrencySymbol()})`}
+          </label>
           <Input
             type="number"
             step="0.01"
             placeholder="0.00"
-            className="bg-neutral-950 border-neutral-800 focus:border-indigo-500 text-neutral-100 rounded-lg"
+            disabled={isEdit}
+            className="bg-neutral-950 border-neutral-800 focus:border-indigo-500 text-neutral-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-neutral-900/50"
             {...register('initialBalance', { valueAsNumber: true })}
           />
           {errors.initialBalance && (
             <p className="text-[11px] text-rose-500 mt-1">{errors.initialBalance.message}</p>
+          )}
+        </div>
+
+        {/* Account Number Input */}
+        <div className="space-y-1">
+          <label className="text-xs font-semibold text-neutral-500">Account Number</label>
+          <Input
+            type="text"
+            placeholder="e.g. 1234567890"
+            className="bg-neutral-950 border-neutral-800 focus:border-indigo-500 text-neutral-100 rounded-lg"
+            {...register('accountNumber', {
+              onChange: (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '');
+              }
+            })}
+          />
+          {errors.accountNumber && (
+            <p className="text-[11px] text-rose-500 mt-1">{errors.accountNumber.message}</p>
           )}
         </div>
 
@@ -157,7 +232,7 @@ export default function AccountForm({ onSuccess }: AccountFormProps) {
             {isSubmitting ? (
               <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              'Create Account'
+              isEdit ? 'Save Changes' : 'Create Account'
             )}
           </button>
         </DialogFooter>

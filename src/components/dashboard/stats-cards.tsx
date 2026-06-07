@@ -11,7 +11,8 @@ import {
   ArrowDownRight, 
   DollarSign,
   Landmark,
-  CreditCard
+  CreditCard,
+  PiggyBank
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -44,8 +45,9 @@ export default function StatsCards({ accounts, filteredTransactions }: StatsCard
     }
   });
 
-  const netSavings = totalIncome - totalExpense;
-  const savingsRate = totalIncome > 0 ? ((netSavings / totalIncome) * 100).toFixed(0) : '0';
+  const savingsAccounts = accounts.filter(acc => acc.type === 'savings');
+  const totalSavings = savingsAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const savingsCount = savingsAccounts.length;
 
   const statItems = [
     {
@@ -56,6 +58,15 @@ export default function StatsCards({ accounts, filteredTransactions }: StatsCard
       icon: Wallet,
       color: 'text-indigo-600 bg-indigo-500/10 border-indigo-500/20',
       gradient: 'from-indigo-600/10 to-transparent'
+    },
+    {
+      title: 'Net Savings',
+      value: formatCurrency(totalSavings),
+      change: `${savingsCount} account${savingsCount === 1 ? '' : 's'} linked`,
+      changeType: 'neutral',
+      icon: PiggyBank,
+      color: totalSavings >= 0 ? 'text-teal-600 bg-teal-500/10 border-teal-500/20' : 'text-amber-600 bg-amber-500/10 border-amber-500/20',
+      gradient: totalSavings >= 0 ? 'from-teal-600/10 to-transparent' : 'from-amber-600/10 to-transparent'
     },
     {
       title: 'Inflow / Income',
@@ -74,15 +85,6 @@ export default function StatsCards({ accounts, filteredTransactions }: StatsCard
       icon: ArrowDownRight,
       color: 'text-rose-600 bg-rose-500/10 border-rose-500/20',
       gradient: 'from-rose-600/10 to-transparent'
-    },
-    {
-      title: 'Net Savings Flow',
-      value: formatCurrency(netSavings),
-      change: `${savingsRate}% savings rate`,
-      changeType: netSavings >= 0 ? 'up' : 'down',
-      icon: DollarSign,
-      color: netSavings >= 0 ? 'text-teal-600 bg-teal-500/10 border-teal-500/20' : 'text-amber-600 bg-amber-500/10 border-amber-500/20',
-      gradient: netSavings >= 0 ? 'from-teal-600/10 to-transparent' : 'from-amber-600/10 to-transparent'
     }
   ];
 
@@ -94,7 +96,7 @@ export default function StatsCards({ accounts, filteredTransactions }: StatsCard
         const CardContent = (
           <div 
             className={`relative rounded-2xl bg-neutral-900 border border-neutral-850 p-6 overflow-hidden flex flex-col justify-between shadow-lg w-full h-full text-left transition-all duration-200 ${
-              idx === 0 
+              idx === 0 || idx === 1
                 ? 'cursor-pointer hover:scale-[1.02] hover:border-neutral-750' 
                 : ''
             }`}
@@ -131,7 +133,7 @@ export default function StatsCards({ accounts, filteredTransactions }: StatsCard
         if (idx === 0) {
           return (
             <Dialog key={idx}>
-              <DialogTrigger render={CardContent} />
+              <DialogTrigger nativeButton={false} render={CardContent} />
               <DialogContent className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
                 <DialogHeader>
                   <DialogTitle className="text-lg font-bold text-neutral-100">Linked Accounts</DialogTitle>
@@ -171,6 +173,55 @@ export default function StatsCards({ accounts, filteredTransactions }: StatsCard
                       </div>
                     );
                   })}
+                </div>
+              </DialogContent>
+            </Dialog>
+          );
+        }
+
+        if (idx === 1) {
+          return (
+            <Dialog key={idx}>
+              <DialogTrigger nativeButton={false} render={CardContent} />
+              <DialogContent className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-bold text-neutral-100">Savings Accounts</DialogTitle>
+                  <DialogDescription className="text-xs text-neutral-500">
+                    A list of all savings accounts linked to your portfolio.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="mt-4 flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-1">
+                  {savingsAccounts.length > 0 ? (
+                    savingsAccounts.map((acc) => {
+                      const borderClass = ACCOUNT_COLOR_CLASSES[acc.color] || 'border-neutral-800 text-neutral-400 bg-neutral-850/5';
+                      return (
+                        <div 
+                          key={acc.id} 
+                          className={`flex items-center justify-between p-4 rounded-xl border ${borderClass}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-neutral-950/60 flex items-center justify-center shrink-0 border border-neutral-800/40">
+                              <Landmark className="h-4.5 w-4.5" />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-xs text-neutral-100">{acc.name}</h4>
+                              <p className="text-[10px] capitalize text-neutral-500 mt-0.5">{acc.type} account</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-extrabold text-sm text-neutral-100">
+                              {formatCurrency(acc.balance)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-6 text-neutral-500 text-xs">
+                      No savings accounts linked yet.
+                    </div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>

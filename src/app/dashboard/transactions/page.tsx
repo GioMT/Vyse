@@ -14,6 +14,8 @@ import {
   ArrowRight,
   FilterX
 } from 'lucide-react';
+import { parseDescription } from '@/lib/format';
+import { useConfirm } from '@/components/ui/confirmation-provider';
 
 export default function TransactionsPage() {
   const { 
@@ -22,6 +24,8 @@ export default function TransactionsPage() {
     transactions, 
     deleteTransaction 
   } = useFinanceStore();
+
+  const confirm = useConfirm();
 
   const [txDialogOpen, setTxDialogOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -35,7 +39,8 @@ export default function TransactionsPage() {
 
   // Filter logic
   const filteredTxs = transactions.filter(tx => {
-    const matchesSearch = tx.description.toLowerCase().includes(search.toLowerCase());
+    const { cleanDesc } = parseDescription(tx.description);
+    const matchesSearch = cleanDesc.toLowerCase().includes(search.toLowerCase());
     const matchesType = typeFilter === 'all' || tx.type === typeFilter;
     const matchesCat = catFilter === 'all' || tx.category_id === catFilter;
     const matchesAcc = accFilter === 'all' || tx.account_id === accFilter;
@@ -66,9 +71,10 @@ export default function TransactionsPage() {
   const handleExportCSV = () => {
     const headers = 'Date,Description,Type,Category,Account,Amount\n';
     const rows = filteredTxs.map(tx => {
+      const { cleanDesc } = parseDescription(tx.description);
       const cat = categories.find(c => c.id === tx.category_id)?.name || 'Uncategorized';
       const acc = accounts.find(a => a.id === tx.account_id)?.name || 'Unknown';
-      return `"${tx.date}","${tx.description.replace(/"/g, '""')}","${tx.type}","${cat}","${acc}",${tx.amount}`;
+      return `"${tx.date}","${cleanDesc.replace(/"/g, '""')}","${tx.type}","${cat}","${acc}",${tx.amount}`;
     }).join('\n');
 
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
@@ -121,7 +127,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Filters Dashboard Toolbar */}
-      <div className="rounded-xl bg-neutral-900 border border-neutral-850 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
+      <div id="tour-transactions-filters" className="rounded-xl bg-neutral-900 border border-neutral-850 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
         {/* Search */}
         <div className="space-y-1.5">
           <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Search</label>
@@ -194,7 +200,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Main Ledger Table Panel */}
-      <div className="rounded-2xl bg-neutral-900 border border-neutral-850 p-6 shadow-lg">
+      <div id="tour-transactions-table" className="rounded-2xl bg-neutral-900 border border-neutral-850 p-6 shadow-lg">
         <div className="overflow-x-auto">
           {currentItems.length > 0 ? (
             <table className="w-full text-left text-xs border-collapse">
@@ -213,6 +219,8 @@ export default function TransactionsPage() {
                   const cat = categories.find(c => c.id === tx.category_id);
                   const acc = accounts.find(a => a.id === tx.account_id);
                   const catColor = cat ? CATEGORY_COLOR_CLASSES[cat.color] : 'bg-neutral-800 text-neutral-400 border-neutral-700/50';
+                  const { cleanDesc, fee } = parseDescription(tx.description);
+                  const baseAmount = tx.amount - fee;
                   
                   return (
                     <tr key={tx.id} className="hover:bg-neutral-850/20 transition-colors group">
@@ -226,22 +234,36 @@ export default function TransactionsPage() {
                           hour12: true 
                         })}
                       </td>
-                      <td className="py-4 font-bold text-neutral-100 text-sm">{tx.description}</td>
+                      <td className="py-4 font-bold text-neutral-100 text-sm">{cleanDesc}</td>
                       <td className="py-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${catColor}`}>
                           {cat ? cat.name : 'Uncategorized'}
                         </span>
                       </td>
                       <td className="py-4 text-neutral-400 font-medium hidden md:table-cell">{acc ? acc.name : 'Unknown Account'}</td>
-                      <td className={`py-4 text-right text-sm font-extrabold ${
-                        tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'
-                      }`}>
-                        {tx.type === 'income' ? '+' : '-'}${tx.amount.toFixed(2)}
+                      <td className="py-4 text-right">
+                        <div className={`text-sm font-extrabold ${
+                          tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}>
+                          {tx.type === 'income' ? '+' : '-'}${baseAmount.toFixed(2)}
+                        </div>
+                        {fee > 0 && (
+                          <div className="text-[10px] text-neutral-500 font-medium">
+                            + ${fee.toFixed(2)} charge
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 text-right">
                         <button
-                          onClick={() => {
-                            if (confirm('Delete this transaction?')) {
+                          onClick={async () => {
+                            const confirmed = await confirm({
+                              title: 'Delete Transaction',
+                              message: 'Are you sure you want to permanently delete this transaction? This action will adjust your account balance and cannot be undone.',
+                              confirmText: 'Delete',
+                              cancelText: 'Cancel',
+                              type: 'danger'
+                            });
+                            if (confirmed) {
                               deleteTransaction(tx.id);
                             }
                           }}

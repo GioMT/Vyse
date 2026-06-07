@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useFinanceStore } from '@/hooks/use-finance-store';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format';
+import { useConfirm } from '@/components/ui/confirmation-provider';
 import { 
   DialogContent, 
   DialogHeader, 
@@ -43,6 +44,7 @@ interface LoanFormProps {
 
 export default function LoanForm({ onSuccess }: LoanFormProps) {
   const { addLoan } = useFinanceStore();
+  const confirm = useConfirm();
 
   const {
     register,
@@ -76,6 +78,14 @@ export default function LoanForm({ onSuccess }: LoanFormProps) {
       const paymentsPerMo = values.paymentFrequency === 'bi-monthly' ? 2 : 1;
       const calculatedPrincipal = values.termMonths * paymentsPerMo * values.monthlyPayment;
 
+      const confirmed = await confirm({
+        title: 'Confirm New Loan Liability',
+        message: `Are you sure you want to save the loan "${values.name}" with a calculated principal of ${formatCurrency(calculatedPrincipal)}?`,
+        confirmText: 'Save Loan',
+        type: 'info'
+      });
+      if (!confirmed) return;
+
       const success = await addLoan({
         name: values.name,
         principal: calculatedPrincipal,
@@ -97,7 +107,7 @@ export default function LoanForm({ onSuccess }: LoanFormProps) {
   };
 
   return (
-    <DialogContent className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
+    <DialogContent id="tour-loan-form" className="sm:max-w-md bg-popover/92 backdrop-blur-md border border-neutral-850 text-neutral-100 p-6 shadow-2xl">
       <DialogHeader>
         <DialogTitle className="text-lg font-bold text-neutral-100">Add Loan Liability</DialogTitle>
         <DialogDescription className="text-xs text-neutral-500">
@@ -172,7 +182,7 @@ export default function LoanForm({ onSuccess }: LoanFormProps) {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-neutral-500">Payment Amount ($)</label>
+            <label className="text-xs font-semibold text-neutral-500">Payment Amount ({getCurrencySymbol()})</label>
             <Input
               type="number"
               step="0.01"

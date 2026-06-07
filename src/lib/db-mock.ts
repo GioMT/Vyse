@@ -1,11 +1,34 @@
 // Client-side localStorage Mock Database for Personal Finance Tracker
 // This allows the app to be fully functional immediately without a live Supabase database.
 
+// Reversible base64 encoding/decryption for mock storage
+export const obfuscate = (str: string): string => {
+  if (!str) return '';
+  try {
+    return btoa(str);
+  } catch {
+    return str;
+  }
+};
+
+export const deobfuscate = (str: string): string => {
+  if (!str) return '';
+  try {
+    return atob(str);
+  } catch {
+    return str;
+  }
+};
+
 export interface Profile {
   id: string;
   email: string;
   full_name: string;
   avatar_url?: string;
+  dob?: string;
+  sex?: string;
+  onboarded?: boolean;
+  currency?: string;
   created_at: string;
 }
 
@@ -16,6 +39,7 @@ export interface Account {
   type: 'checking' | 'savings' | 'credit' | 'cash';
   balance: number;
   color: string; // HSL color or tailwind class for dashboard aesthetics
+  account_number?: string;
   created_at: string;
 }
 
@@ -87,14 +111,14 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-exp-other', user_id: '', name: 'Other Expense', type: 'expense', color: 'zinc', icon: 'HelpCircle' },
 ];
 
-const DEFAULT_ACCOUNTS = (userId: string): Account[] => [
+export const DEFAULT_ACCOUNTS = (userId: string): Account[] => [
   { id: 'acc-checking', user_id: userId, name: 'Chase Checking', type: 'checking', balance: 5420.50, color: 'blue', created_at: new Date().toISOString() },
   { id: 'acc-savings', user_id: userId, name: 'Marcus Savings (5.0% APY)', type: 'savings', balance: 24500.00, color: 'emerald', created_at: new Date().toISOString() },
   { id: 'acc-credit', user_id: userId, name: 'Amex Gold', type: 'credit', balance: -850.20, color: 'amber', created_at: new Date().toISOString() },
   { id: 'acc-cash', user_id: userId, name: 'Cash on Hand', type: 'cash', balance: 350.00, color: 'zinc', created_at: new Date().toISOString() },
 ];
 
-const DEFAULT_LOANS = (userId: string): Loan[] => [
+export const DEFAULT_LOANS = (userId: string): Loan[] => [
   {
     id: 'loan-car',
     user_id: userId,
@@ -128,7 +152,7 @@ const DEFAULT_LOANS = (userId: string): Loan[] => [
   }
 ];
 
-const DEFAULT_BILLS = (userId: string): RecurringBill[] => [
+export const DEFAULT_BILLS = (userId: string): RecurringBill[] => [
   { id: 'bill-rent', user_id: userId, name: 'Monthly Rent', amount: 1800.00, category_id: 'cat-exp-housing', frequency: 'monthly', next_due_date: getFutureDate(1), status: 'unpaid', auto_pay: true, created_at: new Date().toISOString() },
   { id: 'bill-electric', user_id: userId, name: 'Electric Bill (ConEd)', amount: 112.50, category_id: 'cat-exp-utilities', frequency: 'monthly', next_due_date: getFutureDate(10), status: 'unpaid', auto_pay: false, created_at: new Date().toISOString() },
   { id: 'bill-netflix', user_id: userId, name: 'Netflix Premium', amount: 22.99, category_id: 'cat-exp-sub', frequency: 'monthly', next_due_date: getFutureDate(14), status: 'unpaid', auto_pay: true, created_at: new Date().toISOString() },
@@ -158,7 +182,7 @@ function getPastDate(daysAgo: number): string {
   return new Date(d.getTime() - offset).toISOString().slice(0, 16);
 }
 
-const DEFAULT_TRANSACTIONS = (userId: string): Transaction[] => [
+export const DEFAULT_TRANSACTIONS = (userId: string): Transaction[] => [
   { id: 'tx-1', user_id: userId, account_id: 'acc-checking', category_id: 'cat-inc-salary', amount: 2650.00, type: 'income', description: 'Bi-Weekly Salary Google', date: getPastDate(3), created_at: new Date().toISOString() },
   { id: 'tx-2', user_id: userId, account_id: 'acc-checking', category_id: 'cat-exp-housing', amount: 1800.00, type: 'expense', description: 'Monthly Rent', date: getPastDate(3), created_at: new Date().toISOString() },
   { id: 'tx-3', user_id: userId, account_id: 'acc-checking', category_id: 'cat-inc-salary', amount: 2650.00, type: 'income', description: 'Bi-Weekly Salary Google', date: getPastDate(17), created_at: new Date().toISOString() },
@@ -206,6 +230,7 @@ export class MockDatabase {
       password: 'password',
       full_name: 'Alex Mercer',
       avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
+      onboarded: true,
       created_at: new Date('2026-06-03T21:14:15Z').toISOString()
     };
     const list = this.getStorageItem<Array<Profile & { password?: string }>>('pt_mock_users', []);
@@ -221,7 +246,13 @@ export class MockDatabase {
     return list;
   }
 
-  static createMockUser(email: string, password: string, fullName: string): Profile | null {
+  static checkEmailExists(email: string): boolean {
+    const users = this.getMockUsers();
+    const cleanEmail = email.toLowerCase().trim();
+    return users.some(u => u.email.toLowerCase().trim() === cleanEmail);
+  }
+
+  static createMockUser(email: string, password: string, fullName: string, dob?: string, sex?: string): Profile | null {
     const users = this.getMockUsers();
     const cleanEmail = email.toLowerCase().trim();
     if (users.some(u => u.email.toLowerCase().trim() === cleanEmail)) {
@@ -233,6 +264,9 @@ export class MockDatabase {
       email: cleanEmail,
       password: password,
       full_name: fullName,
+      dob: dob,
+      sex: sex,
+      onboarded: false,
       created_at: new Date().toISOString()
     };
 
@@ -258,13 +292,50 @@ export class MockDatabase {
     return null;
   }
 
+  static updateProfile(fullName: string, dob: string, sex: string, onboarded?: boolean, currency?: string): Profile | null {
+    const user = this.getSessionUser();
+    if (!user) return null;
+    
+    const users = this.getMockUsers();
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx !== -1) {
+      users[idx] = {
+        ...users[idx],
+        full_name: fullName,
+        dob,
+        sex,
+        onboarded: onboarded !== undefined ? onboarded : users[idx].onboarded,
+        currency: currency !== undefined ? currency : users[idx].currency
+      };
+      this.setStorageItem('pt_mock_users', users);
+    }
+    
+    const updated = {
+      ...user,
+      full_name: fullName,
+      dob,
+      sex,
+      onboarded: onboarded !== undefined ? onboarded : user.onboarded,
+      currency: currency !== undefined ? currency : user.currency
+    };
+    this.setSessionUser(updated);
+    return updated;
+  }
+
   private static initUserStores(userId: string) {
     const accs = this.getStorageItem<Account[]>(`pt_accounts_${userId}`, []);
     if (accs.length === 0) {
-      this.setStorageItem(`pt_accounts_${userId}`, DEFAULT_ACCOUNTS(userId));
-      this.setStorageItem(`pt_transactions_${userId}`, DEFAULT_TRANSACTIONS(userId));
-      this.setStorageItem(`pt_bills_${userId}`, DEFAULT_BILLS(userId));
-      this.setStorageItem(`pt_loans_${userId}`, DEFAULT_LOANS(userId));
+      if (userId === 'demo-user-id') {
+        this.setStorageItem(`pt_accounts_${userId}`, DEFAULT_ACCOUNTS(userId));
+        this.setStorageItem(`pt_transactions_${userId}`, DEFAULT_TRANSACTIONS(userId));
+        this.setStorageItem(`pt_bills_${userId}`, DEFAULT_BILLS(userId));
+        this.setStorageItem(`pt_loans_${userId}`, DEFAULT_LOANS(userId));
+      } else {
+        this.setStorageItem(`pt_accounts_${userId}`, []);
+        this.setStorageItem(`pt_transactions_${userId}`, []);
+        this.setStorageItem(`pt_bills_${userId}`, []);
+        this.setStorageItem(`pt_loans_${userId}`, []);
+      }
     }
   }
 
@@ -286,7 +357,7 @@ export class MockDatabase {
     this.setStorageItem(`pt_accounts_${uid}`, accounts);
   }
 
-  static createAccount(name: string, type: Account['type'], initialBalance: number, color: string): Account {
+  static createAccount(name: string, type: Account['type'], initialBalance: number, color: string, accountNumber?: string): Account {
     const accounts = this.getAccounts();
     const newAcc: Account = {
       id: `acc-${Date.now()}`,
@@ -295,11 +366,28 @@ export class MockDatabase {
       type,
       balance: type === 'credit' ? -Math.abs(initialBalance) : Math.abs(initialBalance),
       color,
+      account_number: accountNumber ? obfuscate(accountNumber) : '',
       created_at: new Date().toISOString()
     };
     accounts.push(newAcc);
     this.saveAccounts(accounts);
     return newAcc;
+  }
+
+  static updateAccount(id: string, name: string, type: Account['type'], balance: number, color: string, accountNumber?: string): boolean {
+    const accounts = this.getAccounts();
+    const idx = accounts.findIndex(a => a.id === id);
+    if (idx === -1) return false;
+    accounts[idx] = {
+      ...accounts[idx],
+      name,
+      type,
+      balance,
+      color,
+      account_number: accountNumber !== undefined ? (accountNumber ? obfuscate(accountNumber) : '') : accounts[idx].account_number
+    };
+    this.saveAccounts(accounts);
+    return true;
   }
 
   // --- CATEGORIES ---

@@ -1,6 +1,17 @@
 import { create } from 'zustand';
 import { auth, db } from '@/lib/supabase';
-import { Profile, Account, Category, Transaction, RecurringBill, Loan } from '@/lib/db-mock';
+import { 
+  Profile, 
+  Account, 
+  Category, 
+  Transaction, 
+  RecurringBill, 
+  Loan,
+  DEFAULT_ACCOUNTS,
+  DEFAULT_TRANSACTIONS,
+  DEFAULT_BILLS,
+  DEFAULT_LOANS
+} from '@/lib/db-mock';
 
 interface DateRange {
   from: string | null;
@@ -16,6 +27,13 @@ interface FinanceState {
   transactions: Transaction[];
   bills: RecurringBill[];
   loans: Loan[];
+  
+  realAccounts: Account[];
+  realTransactions: Transaction[];
+  realBills: RecurringBill[];
+  realLoans: Loan[];
+  isTourActive: boolean;
+  
   loading: boolean;
   timeFilter: TimeFilter;
   customDateRange: DateRange;
@@ -24,18 +42,25 @@ interface FinanceState {
   fetchUser: () => Promise<Profile | null>;
   login: () => Promise<boolean>;
   loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<{ success: boolean; error?: string }>;
+  signUpWithEmail: (email: string, password: string, fullName: string, dob?: string, sex?: string) => Promise<{ success: boolean; needsVerification: boolean; error?: string }>;
+  checkEmailExists: (email: string) => Promise<boolean>;
+  resendVerificationEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (fullName: string, dob: string, sex: string, onboarded?: boolean, currency?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   fetchData: () => Promise<void>;
+  setTourActive: (active: boolean) => void;
   
-  addAccount: (name: string, type: Account['type'], initialBalance: number, color: string) => Promise<boolean>;
+  addAccount: (name: string, type: Account['type'], initialBalance: number, color: string, accountNumber?: string) => Promise<boolean>;
+  updateAccount: (id: string, name: string, type: Account['type'], balance: number, color: string, accountNumber?: string) => Promise<boolean>;
   addTransaction: (data: {
     accountId: string;
-    categoryId: string;
+    categoryId?: string;
+    toAccountId?: string;
     amount: number;
-    type: 'income' | 'expense';
+    type: 'income' | 'expense' | 'transfer';
     description: string;
     date: string;
+    additionalCharge?: number;
   }) => Promise<boolean>;
   deleteTransaction: (id: string) => Promise<boolean>;
   
@@ -66,169 +91,321 @@ interface FinanceState {
   setCustomDateRange: (range: DateRange) => void;
 }
 
-export const useFinanceStore = create<FinanceState>((set) => ({
-  user: null,
-  accounts: [],
-  categories: [],
-  transactions: [],
-  bills: [],
-  loans: [],
-  loading: true,
-  timeFilter: 'all',
-  customDateRange: { from: null, to: null },
+export const useFinanceStore = create<FinanceState>((set, get) => {
+  const updateStoreState = (updates: {
+    accounts?: Account[];
+    transactions?: Transaction[];
+    bills?: RecurringBill[];
+    loans?: Loan[];
+    isTourActive?: boolean;
+  }) => {
+    const state = get();
+    const isTour = updates.isTourActive !== undefined ? updates.isTourActive : state.isTourActive;
+    const userId = state.user?.id || 'demo-user-id';
 
-  fetchUser: async () => {
-    try {
-      const currentUser = await auth.getCurrentUser();
-      set({ user: currentUser });
-      return currentUser;
-    } catch (e) {
-      console.error(e);
-      return null;
-    }
-  },
+    const realAccs = updates.accounts !== undefined ? updates.accounts : state.realAccounts;
+    const realTxs = updates.transactions !== undefined ? updates.transactions : state.realTransactions;
+    const realBillsList = updates.bills !== undefined ? updates.bills : state.realBills;
+    const realLoansList = updates.loans !== undefined ? updates.loans : state.realLoans;
 
-  login: async () => {
-    const res = await auth.signInWithGoogle();
-    if (res.success) {
-      const currentUser = await auth.getCurrentUser();
-      set({ user: currentUser });
-      return true;
-    }
-    return false;
-  },
+    set({
+      realAccounts: realAccs,
+      realTransactions: realTxs,
+      realBills: realBillsList,
+      realLoans: realLoansList,
+      isTourActive: isTour,
+      
+      accounts: isTour ? DEFAULT_ACCOUNTS(userId) : realAccs,
+      transactions: isTour ? DEFAULT_TRANSACTIONS(userId) : realTxs,
+      bills: isTour ? DEFAULT_BILLS(userId) : realBillsList,
+      loans: isTour ? DEFAULT_LOANS(userId) : realLoansList,
+    });
+  };
 
-  loginWithEmail: async (email, password) => {
-    const res = await auth.signInWithEmailAndPassword(email, password);
-    if (res.success) {
-      const currentUser = await auth.getCurrentUser();
-      set({ user: currentUser });
-      return { success: true };
-    }
-    return { success: false, error: res.error || 'Login failed' };
-  },
+  return {
+    user: null,
+    accounts: [],
+    categories: [],
+    transactions: [],
+    bills: [],
+    loans: [],
 
-  signUpWithEmail: async (email, password, fullName) => {
-    const res = await auth.signUpWithEmailAndPassword(email, password, fullName);
-    if (res.success) {
-      const currentUser = await auth.getCurrentUser();
-      set({ user: currentUser });
-      return { success: true };
-    }
-    return { success: false, error: res.error || 'Registration failed' };
-  },
+    realAccounts: [],
+    realTransactions: [],
+    realBills: [],
+    realLoans: [],
+    isTourActive: typeof window !== 'undefined' ? localStorage.getItem('vyse_tour_active') === 'true' : false,
 
-  logout: async () => {
-    await auth.signOut();
-    set({ user: null, accounts: [], transactions: [], bills: [], loans: [] });
-  },
+    loading: true,
+    timeFilter: 'all',
+    customDateRange: { from: null, to: null },
 
-  fetchData: async () => {
-    set({ loading: true });
-    try {
-      // 1. Run simulation first (auto-pay due bills in demo mode)
-      await db.runAutoPaySimulation();
+    fetchUser: async () => {
+      try {
+        const currentUser = await auth.getCurrentUser();
+        set({ user: currentUser });
+        return currentUser;
+      } catch (e) {
+        console.error(e);
+        return null;
+      }
+    },
 
-      // 2. Fetch everything
-      const [accs, cats, txs, billsList, loansList] = await Promise.all([
-        db.getAccounts(),
-        db.getCategories(),
-        db.getTransactions(),
-        db.getBills(),
-        db.getLoans()
-      ]);
+    login: async () => {
+      const res = await auth.signInWithGoogle();
+      if (res.success) {
+        const currentUser = await auth.getCurrentUser();
+        set({ user: currentUser });
+        return true;
+      }
+      return false;
+    },
 
-      set({
-        accounts: accs,
-        categories: cats,
-        transactions: txs,
-        bills: billsList,
-        loans: loansList,
-        loading: false
+    loginWithEmail: async (email, password) => {
+      const res = await auth.signInWithEmailAndPassword(email, password);
+      if (res.success) {
+        const currentUser = await auth.getCurrentUser();
+        set({ user: currentUser });
+        return { success: true };
+      }
+      return { success: false, error: res.error || 'Login failed' };
+    },
+
+    signUpWithEmail: async (email, password, fullName, dob, sex) => {
+      const res = await auth.signUpWithEmailAndPassword(email, password, fullName, dob, sex);
+      if (res.success) {
+        if (!res.needsVerification) {
+          const currentUser = await auth.getCurrentUser();
+          set({ user: currentUser });
+        }
+        return { success: true, needsVerification: res.needsVerification };
+      }
+      return { success: false, needsVerification: false, error: res.error || 'Registration failed' };
+    },
+
+    checkEmailExists: async (email) => {
+      return await auth.checkEmailExists(email);
+    },
+
+    resendVerificationEmail: async (email) => {
+      return await auth.resendVerificationEmail(email);
+    },
+
+    updateProfile: async (fullName, dob, sex, onboarded, currency) => {
+      const res = await auth.updateProfile(fullName, dob, sex, onboarded, currency);
+      if (res.success && res.profile) {
+        set({ user: res.profile });
+        return { success: true };
+      }
+      return { success: false, error: res.error || 'Profile update failed' };
+    },
+
+    logout: async () => {
+      await auth.signOut();
+      updateStoreState({
+        accounts: [],
+        transactions: [],
+        bills: [],
+        loans: [],
+        isTourActive: false
       });
-    } catch (e) {
-      console.error('Error fetching dashboard data:', e);
-      set({ loading: false });
-    }
-  },
+      set({ user: null });
+    },
 
-  addAccount: async (name, type, initialBalance, color) => {
-    const acc = await db.createAccount(name, type, initialBalance, color);
-    if (acc) {
-      set(state => ({ accounts: [...state.accounts, acc] }));
-      return true;
-    }
-    return false;
-  },
+    fetchData: async () => {
+      set({ loading: true });
+      try {
+        // 1. Run simulation first (auto-pay due bills in demo mode)
+        await db.runAutoPaySimulation();
 
-  addTransaction: async (data) => {
-    const tx = await db.createTransaction(data);
-    if (tx) {
+        // 2. Fetch everything
+        const [accs, cats, txs, billsList, loansList] = await Promise.all([
+          db.getAccounts(),
+          db.getCategories(),
+          db.getTransactions(),
+          db.getBills(),
+          db.getLoans()
+        ]);
+
+        set({ categories: cats, loading: false });
+        updateStoreState({
+          accounts: accs,
+          transactions: txs,
+          bills: billsList,
+          loans: loansList
+        });
+      } catch (e) {
+        console.error('Error fetching dashboard data:', e);
+        set({ loading: false });
+      }
+    },
+
+    setTourActive: (active) => {
+      updateStoreState({ isTourActive: active });
+    },
+
+    addAccount: async (name, type, initialBalance, color, accountNumber) => {
+      const acc = await db.createAccount(name, type, initialBalance, color, accountNumber);
+      if (acc) {
+        updateStoreState({ accounts: [...get().realAccounts, acc] });
+        return true;
+      }
+      return false;
+    },
+
+    updateAccount: async (id, name, type, balance, color, accountNumber) => {
+      const success = await db.updateAccount(id, name, type, balance, color, accountNumber);
+      if (success) {
+        const accs = await db.getAccounts();
+        updateStoreState({ accounts: accs });
+        return true;
+      }
+      return false;
+    },
+
+    addTransaction: async (data) => {
+      if (data.type === 'transfer') {
+        const timestamp = Date.now();
+        const refId = `tx-tr-${timestamp}`;
+        const additionalCharge = data.additionalCharge || 0;
+        
+        // Fetch account names for description metadata
+        const state = get();
+        const fromAcc = state.accounts.find(a => a.id === data.accountId);
+        const toAcc = state.accounts.find(a => a.id === data.toAccountId);
+        const fromAccName = fromAcc ? fromAcc.name : 'Account';
+        const toAccName = toAcc ? toAcc.name : 'Account';
+        
+        const sourceDesc = `${data.description || 'Transfer'} to ${toAccName} [Fee: ${additionalCharge.toFixed(2)}] (Ref: ${refId})`;
+        const destDesc = `${data.description || 'Transfer'} from ${fromAccName} (Ref: ${refId})`;
+        
+        // 1. Create source account expense (amount + fee)
+        const sourceTx = await db.createTransaction({
+          accountId: data.accountId,
+          categoryId: 'cat-exp-other', // Default to Other Expense for transfers
+          amount: data.amount + additionalCharge,
+          type: 'expense',
+          description: sourceDesc,
+          date: data.date
+        });
+        
+        if (!sourceTx) return false;
+        
+        // 2. Create destination account income (base amount)
+        const destTx = await db.createTransaction({
+          accountId: data.toAccountId || '',
+          categoryId: 'cat-inc-other', // Default to Other Income for transfers
+          amount: data.amount,
+          type: 'income',
+          description: destDesc,
+          date: data.date
+        });
+        
+        if (!destTx) {
+          // Rollback source transaction if destination fails
+          await db.deleteTransaction(sourceTx.id);
+          return false;
+        }
+        
+        const [accs, txs] = await Promise.all([db.getAccounts(), db.getTransactions()]);
+        updateStoreState({ accounts: accs, transactions: txs });
+        return true;
+      } else {
+        const additionalCharge = data.additionalCharge || 0;
+        const finalAmount = data.type === 'expense' ? (data.amount + additionalCharge) : data.amount;
+        const finalDescription = additionalCharge > 0 
+          ? `${data.description} [Fee: ${additionalCharge.toFixed(2)}]`
+          : data.description;
+          
+        const tx = await db.createTransaction({
+          accountId: data.accountId,
+          categoryId: data.categoryId || '',
+          amount: finalAmount,
+          type: data.type === 'income' ? 'income' : 'expense',
+          description: finalDescription,
+          date: data.date
+        });
+        
+        if (tx) {
+          const [accs, txs] = await Promise.all([db.getAccounts(), db.getTransactions()]);
+          updateStoreState({ accounts: accs, transactions: txs });
+          return true;
+        }
+        return false;
+      }
+    },
+
+    deleteTransaction: async (id) => {
+      const state = get();
+      const target = state.transactions.find(t => t.id === id);
+      if (target) {
+        const refMatch = target.description.match(/\(Ref:\s*(tx-tr-\d+)\)/);
+        if (refMatch) {
+          const refId = refMatch[1];
+          // Find all transactions containing this reference ID
+          const linkedTxs = state.transactions.filter(t => t.description.includes(`(Ref: ${refId})`));
+          // Delete all linked transactions
+          await Promise.all(linkedTxs.map(t => db.deleteTransaction(t.id)));
+        } else {
+          await db.deleteTransaction(id);
+        }
+      } else {
+        await db.deleteTransaction(id);
+      }
+      
       // Refresh both transactions and accounts since balances change
       const [accs, txs] = await Promise.all([db.getAccounts(), db.getTransactions()]);
-      set({ accounts: accs, transactions: txs });
+      updateStoreState({ accounts: accs, transactions: txs });
       return true;
-    }
-    return false;
-  },
+    },
 
-  deleteTransaction: async (id) => {
-    const success = await db.deleteTransaction(id);
-    if (success) {
-      // Refresh both transactions and accounts since balances change
-      const [accs, txs] = await Promise.all([db.getAccounts(), db.getTransactions()]);
-      set({ accounts: accs, transactions: txs });
-      return true;
-    }
-    return false;
-  },
+    addBill: async (data) => {
+      const bill = await db.createBill(data);
+      if (bill) {
+        updateStoreState({ bills: [...get().realBills, bill] });
+        return true;
+      }
+      return false;
+    },
 
-  addBill: async (data) => {
-    const bill = await db.createBill(data);
-    if (bill) {
-      set(state => ({ bills: [...state.bills, bill] }));
-      return true;
-    }
-    return false;
-  },
+    payBill: async (billId, accountId) => {
+      const tx = await db.payBill(billId, accountId);
+      if (tx) {
+        const [accs, txs, billsList] = await Promise.all([
+          db.getAccounts(),
+          db.getTransactions(),
+          db.getBills()
+        ]);
+        updateStoreState({ accounts: accs, transactions: txs, bills: billsList });
+        return true;
+      }
+      return false;
+    },
 
-  payBill: async (billId, accountId) => {
-    const tx = await db.payBill(billId, accountId);
-    if (tx) {
-      const [accs, txs, billsList] = await Promise.all([
-        db.getAccounts(),
-        db.getTransactions(),
-        db.getBills()
-      ]);
-      set({ accounts: accs, transactions: txs, bills: billsList });
-      return true;
-    }
-    return false;
-  },
+    addLoan: async (data) => {
+      const loan = await db.createLoan(data);
+      if (loan) {
+        updateStoreState({ loans: [...get().realLoans, loan] });
+        return true;
+      }
+      return false;
+    },
 
-  addLoan: async (data) => {
-    const loan = await db.createLoan(data);
-    if (loan) {
-      set(state => ({ loans: [...state.loans, loan] }));
-      return true;
-    }
-    return false;
-  },
+    makeLoanPayment: async (loanId, accountId, amount, lateCharge, comment) => {
+      const tx = await db.makeLoanPayment(loanId, accountId, amount, lateCharge, comment);
+      if (tx) {
+        const [accs, txs, loansList] = await Promise.all([
+          db.getAccounts(),
+          db.getTransactions(),
+          db.getLoans()
+        ]);
+        updateStoreState({ accounts: accs, transactions: txs, loans: loansList });
+        return true;
+      }
+      return false;
+    },
 
-  makeLoanPayment: async (loanId, accountId, amount, lateCharge, comment) => {
-    const tx = await db.makeLoanPayment(loanId, accountId, amount, lateCharge, comment);
-    if (tx) {
-      const [accs, txs, loansList] = await Promise.all([
-        db.getAccounts(),
-        db.getTransactions(),
-        db.getLoans()
-      ]);
-      set({ accounts: accs, transactions: txs, loans: loansList });
-      return true;
-    }
-    return false;
-  },
-
-  setTimeFilter: (filter) => set({ timeFilter: filter }),
-  setCustomDateRange: (range) => set({ customDateRange: range })
-}));
+    setTimeFilter: (filter) => set({ timeFilter: filter }),
+    setCustomDateRange: (range) => set({ customDateRange: range })
+  };
+});

@@ -7,15 +7,16 @@ import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import LoanForm from '@/components/dashboard/loan-form';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format';
+import { useConfirm } from '@/components/ui/confirmation-provider';
 import { 
-  PiggyBank, 
   Plus, 
   TrendingDown, 
   CheckCircle,
   CircleDollarSign,
   Info
 } from 'lucide-react';
+import { HandDollar } from '@/components/ui/hand-dollar';
 
 // Helper functions for next payment schedule calculations
 function parseLocalDate(dateStr: string): Date {
@@ -127,7 +128,22 @@ export default function LoansPage() {
     makeLoanPayment 
   } = useFinanceStore();
 
+  const confirm = useConfirm();
+
   const [loanDialogOpen, setLoanDialogOpen] = useState(false);
+
+  // Programmatic event listener to open/close loan modal during product tour
+  React.useEffect(() => {
+    const handleOpen = () => setLoanDialogOpen(true);
+    const handleClose = () => setLoanDialogOpen(false);
+    window.addEventListener('vyse_open_add_loan', handleOpen);
+    window.addEventListener('vyse_close_add_loan', handleClose);
+    return () => {
+      window.removeEventListener('vyse_open_add_loan', handleOpen);
+      window.removeEventListener('vyse_close_add_loan', handleClose);
+    };
+  }, []);
+
   const defaultAcc = accounts.find(a => a.type === 'checking') || accounts[0];
   const [selectedLoanId, setSelectedLoanId] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState(defaultAcc?.id || '');
@@ -169,6 +185,17 @@ export default function LoansPage() {
       return;
     }
 
+    const totalDeducted = amt + fee;
+    const loanName = loans.find(l => l.id === selectedLoanId)?.name || 'selected loan';
+
+    const confirmed = await confirm({
+      title: 'Confirm Loan Payment',
+      message: `Are you sure you want to pay ${formatCurrency(amt)} towards your "${loanName}"? A total of ${formatCurrency(totalDeducted)} will be deducted from your account.`,
+      confirmText: 'Apply Payment',
+      type: 'warning'
+    });
+    if (!confirmed) return;
+
     setSubmitting(true);
     try {
       const success = await makeLoanPayment(
@@ -208,7 +235,7 @@ export default function LoansPage() {
         <Dialog open={loanDialogOpen} onOpenChange={setLoanDialogOpen}>
           <DialogTrigger
             render={
-              <button className="h-9 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-95 text-white text-xs font-bold transition-all duration-150 flex items-center gap-1.5 cursor-pointer">
+              <button id="tour-add-loan" className="h-9 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-550 active:scale-95 text-white text-xs font-bold transition-all duration-150 flex items-center gap-1.5 cursor-pointer">
                 <Plus className="h-4 w-4" />
                 <span>Track Loan</span>
               </button>
@@ -219,7 +246,7 @@ export default function LoansPage() {
       </div>
 
       {/* Aggregate Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div id="tour-loans-aggregate" className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Total Owed */}
         <div className="rounded-xl bg-neutral-900 border border-neutral-850 p-5 flex items-center justify-between shadow-md">
           <div className="space-y-1">
@@ -252,7 +279,7 @@ export default function LoansPage() {
               <h3 className="text-xl font-extrabold text-indigo-600">{overallProgress.toFixed(1)}%</h3>
             </div>
             <div className="h-10 w-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 flex items-center justify-center shrink-0">
-              <PiggyBank className="h-5 w-5" />
+              <HandDollar className="h-5 w-5" />
             </div>
           </div>
           <div className="mt-4">
@@ -265,7 +292,7 @@ export default function LoansPage() {
       {loans.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Left Column: Loan Cards List */}
-          <div className="lg:col-span-2 space-y-4">
+          <div id="tour-loans-list" className="lg:col-span-2 space-y-4">
             {loans.map((loan) => {
               const loanPaidPct = (loan.paid_amount / (loan.remaining_balance + loan.paid_amount)) * 100 || 0;
               return (
@@ -341,7 +368,7 @@ export default function LoansPage() {
           </div>
 
           {/* Right Column: Amortization Payment Tool */}
-          <div className="rounded-xl bg-neutral-900 border border-neutral-850 p-5 shadow-md">
+          <div id="tour-loans-tool" className="rounded-xl bg-neutral-900 border border-neutral-850 p-5 shadow-md">
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-neutral-100">Debt Payment Tool</h3>
               <p className="text-xs text-neutral-500">Make an extra payment to reduce your loan balance faster.</p>
@@ -381,16 +408,16 @@ export default function LoansPage() {
                   className="w-full h-9.5 px-3 rounded-lg bg-neutral-950 border border-neutral-800 text-xs text-neutral-100 focus:outline-none focus:border-indigo-500"
                 >
                   {accounts.map(a => (
-                    <option key={a.id} value={a.id}>{a.name} (${a.balance.toFixed(2)})</option>
+                    <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>
                   ))}
                 </select>
               </div>
 
               {/* Payment Amount */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-500">Payment Amount ($)</label>
+                <label className="text-xs font-semibold text-neutral-500">Payment Amount ({getCurrencySymbol()})</label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 text-xs">$</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 text-xs">{getCurrencySymbol()}</span>
                   <Input
                     type="number"
                     step="0.01"
@@ -436,9 +463,9 @@ export default function LoansPage() {
                 <div className="space-y-4 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
                   {/* Additional Charge Amount */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-500">Additional Charge Amount ($)</label>
+                    <label className="text-xs font-semibold text-neutral-500">Additional Charge Amount ({getCurrencySymbol()})</label>
                     <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 text-xs">$</span>
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500 text-xs">{getCurrencySymbol()}</span>
                       <Input
                         type="number"
                         step="0.01"
@@ -494,7 +521,7 @@ export default function LoansPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-neutral-850 bg-neutral-900/10 p-12 text-center flex flex-col gap-1 items-center justify-center max-w-lg mx-auto">
-          <PiggyBank className="h-8 w-8 text-neutral-550 mb-2" />
+          <HandDollar className="h-8 w-8 text-neutral-550 mb-2" />
           <h4 className="font-bold text-neutral-100 text-sm">No active loan liabilities</h4>
           <p className="text-xs text-neutral-500">Track student debt, vehicle financing, or mortgage principal balances easily.</p>
         </div>

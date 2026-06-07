@@ -33,12 +33,15 @@ export const auth = {
       .eq('id', user.id)
       .single();
 
-    return profile || {
+    return {
       id: user.id,
       email: user.email || '',
-      full_name: user.user_metadata?.full_name || 'Supabase User',
-      avatar_url: user.user_metadata?.avatar_url,
-      created_at: user.created_at
+      full_name: profile?.full_name || user.user_metadata?.full_name || 'Supabase User',
+      avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url,
+      dob: profile?.dob || user.user_metadata?.dob,
+      sex: profile?.sex || user.user_metadata?.sex,
+      onboarded: profile?.onboarded ?? user.user_metadata?.onboarded ?? false,
+      created_at: profile?.created_at || user.created_at
     };
   },
 
@@ -65,39 +68,68 @@ export const auth = {
     return { success: true };
   },
 
-  async signUpWithEmailAndPassword(email: string, password: string, fullName: string): Promise<{ success: boolean; error?: string }> {
+  async checkEmailExists(email: string): Promise<boolean> {
     if (isDemoMode()) {
-      const profile = MockDatabase.createMockUser(email, password, fullName);
+      return MockDatabase.checkEmailExists(email);
+    }
+    return false;
+  },
+
+  async signUpWithEmailAndPassword(email: string, password: string, fullName: string, dob?: string, sex?: string): Promise<{ success: boolean; needsVerification: boolean; error?: string }> {
+    if (isDemoMode()) {
+      const profile = MockDatabase.createMockUser(email, password, fullName, dob, sex);
       if (profile) {
         if (typeof document !== 'undefined') {
           document.cookie = "pt_session_active=true; path=/; max-age=86400; SameSite=Lax";
         }
-        return { success: true };
+        return { success: true, needsVerification: false };
       }
-      return { success: false, error: 'An account with this email already exists.' };
+      return { success: false, needsVerification: false, error: 'An account with this email already exists.' };
     }
 
-    if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+    if (!supabase) return { success: false, needsVerification: false, error: 'Supabase client not initialized' };
 
     const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          full_name: fullName
+          full_name: fullName,
+          dob,
+          sex,
+          onboarded: false
         }
       }
     });
 
-    if (error) return { success: false, error: error.message };
+    if (error) return { success: false, needsVerification: false, error: error.message };
 
-    // Set cookie on successful sign up
-    if (data.user) {
+    // In Supabase, if email verification is enabled, session will be null.
+    const needsVerification = !data.session;
+
+    // Set cookie only on successful signup with active session
+    if (data.session) {
       if (typeof document !== 'undefined') {
         document.cookie = "pt_session_active=true; path=/; max-age=86400; SameSite=Lax";
       }
     }
 
+    return { success: true, needsVerification };
+  },
+
+  async resendVerificationEmail(email: string): Promise<{ success: boolean; error?: string }> {
+    if (isDemoMode()) {
+      return { success: true };
+    }
+    if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/dashboard`
+      }
+    });
+    if (error) return { success: false, error: error.message };
     return { success: true };
   },
 
@@ -145,6 +177,63 @@ export const auth = {
         document.cookie = "pt_session_active=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       }
     }
+  },
+
+  async updateProfile(fullName: string, dob: string, sex: string, onboarded?: boolean, currency?: string): Promise<{ success: boolean; profile?: Profile; error?: string }> {
+    if (isDemoMode()) {
+      const profile = MockDatabase.updateProfile(fullName, dob, sex, onboarded, currency);
+      if (profile) {
+        return { success: true, profile };
+      }
+      return { success: false, error: 'No active session' };
+    }
+    
+    if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+    
+    const { error: metaError } = await supabase.auth.updateUser({
+      data: {
+        full_name: fullName,
+        dob,
+        sex,
+        onboarded: onboarded !== undefined ? onboarded : user.user_metadata?.onboarded,
+        currency: currency !== undefined ? currency : user.user_metadata?.currency
+      }
+    });
+    if (metaError) return { success: false, error: metaError.message };
+    
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: fullName,
+        dob,
+        sex,
+        onboarded: onboarded !== undefined ? onboarded : true,
+        currency: currency !== undefined ? currency : 'PHP'
+      })
+      .eq('id', user.id)
+      .select()
+      .single();
+      
+    if (error) {
+      return { 
+        success: true, 
+        profile: {
+          id: user.id,
+          email: user.email || '',
+          full_name: fullName,
+          dob,
+          sex,
+          onboarded: onboarded ?? true,
+          currency: currency || user.user_metadata?.currency || 'PHP',
+          created_at: user.created_at
+        } 
+      };
+    }
+    
+    return { success: true, profile };
   }
 };
 
@@ -168,9 +257,9 @@ export const db = {
     return data || [];
   },
 
-  async createAccount(name: string, type: Account['type'], initialBalance: number, color: string): Promise<Account | null> {
+  async createAccount(name: string, type: Account['type'], initialBalance: number, color: string, accountNumber?: string): Promise<Account | null> {
     if (isDemoMode()) {
-      return MockDatabase.createAccount(name, type, initialBalance, color);
+      return MockDatabase.createAccount(name, type, initialBalance, color, accountNumber);
     }
     if (!supabase) return null;
     const { data: { user } } = await supabase.auth.getUser();
@@ -183,7 +272,8 @@ export const db = {
         name,
         type,
         balance: type === 'credit' ? -Math.abs(initialBalance) : Math.abs(initialBalance),
-        color
+        color,
+        account_number: accountNumber
       })
       .select()
       .single();
@@ -193,6 +283,30 @@ export const db = {
       return null;
     }
     return data;
+  },
+
+  async updateAccount(id: string, name: string, type: Account['type'], balance: number, color: string, accountNumber?: string): Promise<boolean> {
+    if (isDemoMode()) {
+      return MockDatabase.updateAccount(id, name, type, balance, color, accountNumber);
+    }
+    if (!supabase) return false;
+
+    const { error } = await supabase
+      .from('accounts')
+      .update({
+        name,
+        type,
+        balance,
+        color,
+        account_number: accountNumber
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating account:', error.message);
+      return false;
+    }
+    return true;
   },
 
   // --- CATEGORIES ---

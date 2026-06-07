@@ -6,20 +6,20 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useFinanceStore } from '@/hooks/use-finance-store';
 import { isDemoMode } from '@/lib/supabase';
+import { useConfirm } from '@/components/ui/confirmation-provider';
 import { 
   LayoutDashboard, 
   Receipt, 
   CalendarDays, 
-  PiggyBank, 
   LogOut, 
   ChevronLeft, 
   ChevronRight,
-  RefreshCw,
   User,
   Menu,
   X,
   Wallet
 } from 'lucide-react';
+import { HandDollar } from '@/components/ui/hand-dollar';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -28,29 +28,28 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const demoMode = isDemoMode();
+  const confirm = useConfirm();
 
   const handleLogout = async () => {
+    const confirmed = await confirm({
+      title: 'Confirm Sign Out',
+      message: 'Are you sure you want to sign out of your Vyse workspace session?',
+      confirmText: 'Sign Out',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
     await logout();
     router.push('/');
   };
 
-  const handleResetData = () => {
-    if (confirm('Are you sure you want to reset all mock data to defaults?')) {
-      if (typeof window !== 'undefined' && user) {
-        localStorage.removeItem(`pt_accounts_${user.id}`);
-        localStorage.removeItem(`pt_transactions_${user.id}`);
-        localStorage.removeItem(`pt_bills_${user.id}`);
-        localStorage.removeItem(`pt_loans_${user.id}`);
-        fetchData(); // reload
-      }
-    }
-  };
+
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Transactions', href: '/dashboard/transactions', icon: Receipt },
     { name: 'Recurring Bills', href: '/dashboard/bills', icon: CalendarDays },
-    { name: 'Loans Tracker', href: '/dashboard/loans', icon: PiggyBank },
+    { name: 'Loans Tracker', href: '/dashboard/loans', icon: HandDollar },
     { name: 'Linked Accounts', href: '/dashboard/accounts', icon: Wallet },
   ];
 
@@ -136,18 +135,7 @@ export default function Sidebar() {
 
         {/* Footer Actions */}
         <div className="flex flex-col gap-4">
-          {demoMode && (
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                handleResetData();
-              }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-xs text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/5 border border-dashed border-amber-500/20 cursor-pointer transition-colors"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>Reset Demo Workspace</span>
-            </button>
-          )}
+
 
           <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-950/40 border border-neutral-850/50">
             <div className="flex items-center gap-3">
@@ -187,7 +175,6 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Desktop Sidebar (visible on medium screens and up) */}
       <aside 
         className={`hidden md:flex h-screen bg-neutral-900 border-r border-neutral-850 flex-col justify-between transition-all duration-300 relative z-20 text-neutral-200 shrink-0 ${collapsed ? 'w-20' : 'w-64'}`}
       >
@@ -213,7 +200,7 @@ export default function Sidebar() {
           </div>
 
           {/* Navigation Items */}
-          <nav className="px-3 py-4 flex flex-col gap-1">
+          <nav id="tour-sidebar" className="px-3 py-4 flex flex-col gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -244,27 +231,10 @@ export default function Sidebar() {
 
         {/* Bottom Section: User Profile & Reset actions */}
         <div className="p-3 border-t border-neutral-850 flex flex-col gap-2">
-          {/* Reset Mock Data Button (Only in Demo Mode) */}
-          {!collapsed && demoMode && (
-            <button
-              onClick={handleResetData}
-              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-xs text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/5 border border-dashed border-amber-500/20 cursor-pointer transition-colors"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>Reset Demo Workspace</span>
-            </button>
-          )}
-          {collapsed && demoMode && (
-            <button
-              onClick={handleResetData}
-              className="flex items-center justify-center p-2 rounded-lg text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/5 cursor-pointer relative group"
-            >
-              <RefreshCw className="h-4.5 w-4.5" />
-              <div className="absolute left-16 bg-neutral-950 border border-neutral-850 px-2 py-1.5 rounded-lg text-xs font-medium text-amber-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap shadow-xl z-50">
-                Reset Demo Workspace
-              </div>
-            </button>
-          )}
+          {/* Product Tour Button */}
+
+
+
 
           {/* User Card */}
           <div className={`flex items-center justify-between p-2 rounded-xl bg-neutral-950/40 border border-neutral-850/50 ${collapsed ? 'flex-col gap-3 justify-center' : ''}`}>
