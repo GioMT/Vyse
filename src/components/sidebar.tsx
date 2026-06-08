@@ -204,6 +204,7 @@ export default function Sidebar() {
                   <HelpCircle className="h-4 w-4 text-indigo-400 shrink-0" />
                   <span>Support</span>
                 </button>
+                {/* Hide Integrations for tenant side
                 <button
                   onClick={() => { setIntegrationsOpen(true); setShowProfileMenu(false); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left"
@@ -211,6 +212,7 @@ export default function Sidebar() {
                   <Globe className="h-4 w-4 text-indigo-400 shrink-0" />
                   <span>Integrations</span>
                 </button>
+                */}
                 <button
                   onClick={handleRestartTour}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-850 transition-all cursor-pointer text-left border-t border-neutral-850/50 pt-2 mt-1"
@@ -365,6 +367,7 @@ export default function Sidebar() {
                   <HelpCircle className="h-4 w-4 text-indigo-400 shrink-0" />
                   <span>Support</span>
                 </button>
+                {/* Hide Integrations for tenant side
                 <button
                   onClick={() => { setIntegrationsOpen(true); setShowProfileMenu(false); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left"
@@ -372,6 +375,7 @@ export default function Sidebar() {
                   <Globe className="h-4 w-4 text-indigo-400 shrink-0" />
                   <span>Integrations</span>
                 </button>
+                */}
                 <button
                   onClick={handleRestartTour}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-all cursor-pointer text-left border-t border-neutral-850/50 pt-2 mt-1"
