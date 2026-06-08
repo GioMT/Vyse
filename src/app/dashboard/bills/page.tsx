@@ -66,7 +66,13 @@ export default function BillsPage() {
   const handlePayBill = async (billId: string) => {
     const accId = selectedAccountId || defaultAccount?.id;
     if (!accId) {
-      alert('Please create a financial account first to process invoice payments.');
+      await confirm({
+        title: 'Account Required',
+        message: 'Please create a financial account first to process invoice payments.',
+        confirmText: 'OK',
+        type: 'warning',
+        isAlert: true
+      });
       return;
     }
     
@@ -87,6 +93,13 @@ export default function BillsPage() {
       const success = await payBill(billId, accId);
       if (success) {
         setPayingBillId(null);
+        await confirm({
+          title: 'Bill Paid',
+          message: `Successfully processed payment for "${billName}" of ${billAmountStr}!`,
+          confirmText: 'OK',
+          type: 'success',
+          isAlert: true
+        });
       }
     } catch (e) {
       console.error(e);

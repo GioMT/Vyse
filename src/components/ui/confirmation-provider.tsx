@@ -17,6 +17,7 @@ interface ConfirmOptions {
   confirmText?: string;
   cancelText?: string;
   type?: 'default' | 'danger' | 'warning' | 'success' | 'info';
+  isAlert?: boolean;
 }
 
 interface ConfirmContextType {
@@ -105,19 +106,21 @@ export function ConfirmationProvider({ children }: { children: React.ReactNode }
             </div>
           </div>
           <DialogFooter className="mt-4 pt-2 flex flex-row gap-2 justify-end sm:justify-end">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="h-9 px-4 text-xs font-bold rounded-lg bg-neutral-850 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800 transition-all duration-150 cursor-pointer"
-            >
-              {options?.cancelText || 'Cancel'}
-            </button>
+            {!options?.isAlert && (
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="h-9 px-4 text-xs font-bold rounded-lg bg-neutral-850 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800 transition-all duration-150 cursor-pointer"
+              >
+                {options?.cancelText || 'Cancel'}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleConfirm}
               className={`h-9 px-4 text-xs font-bold rounded-lg text-white border transition-all duration-150 active:scale-97 cursor-pointer ${getConfirmButtonStyles()}`}
             >
-              {options?.confirmText || 'Confirm'}
+              {options?.confirmText || (options?.isAlert ? 'OK' : 'Confirm')}
             </button>
           </DialogFooter>
         </DialogContent>

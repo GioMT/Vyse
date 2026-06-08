@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -66,16 +66,11 @@ function getPasswordStrength(password: string): {
   }
 }
 
-const passwordSchema = z.object({
-  oldPassword: z.string().min(1, { message: 'Current password is required' }),
-  newPassword: z.string().min(6, { message: 'New password must be at least 6 characters' }),
-  confirmPassword: z.string().min(1, { message: 'Confirm password is required' }),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: 'New password and confirm password do not match',
-  path: ['confirmPassword']
-});
-
-type PasswordFormValues = z.infer<typeof passwordSchema>;
+interface PasswordFormValues {
+  oldPassword?: string;
+  newPassword: string;
+  confirmPassword: string;
+}
 
 interface PasswordChangeModalProps {
   onSuccess: () => void;
@@ -99,6 +94,19 @@ export default function PasswordChangeModal({ onSuccess }: PasswordChangeModalPr
   const [verificationCode, setVerificationCode] = useState('');
   const [inputCode, setInputCode] = useState<string[]>(Array(6).fill(''));
 
+  const passwordSchema = useMemo(() => {
+    return z.object({
+      oldPassword: user?.has_password 
+        ? z.string().min(1, { message: 'Current password is required' })
+        : z.string().optional(),
+      newPassword: z.string().min(6, { message: 'New password must be at least 6 characters' }),
+      confirmPassword: z.string().min(1, { message: 'Confirm password is required' }),
+    }).refine((data) => data.newPassword === data.confirmPassword, {
+      message: 'New password and confirm password do not match',
+      path: ['confirmPassword']
+    });
+  }, [user?.has_password]);
+
   const {
     register,
     handleSubmit,
@@ -106,7 +114,7 @@ export default function PasswordChangeModal({ onSuccess }: PasswordChangeModalPr
     watch,
     formState: { errors }
   } = useForm<PasswordFormValues>({
-    resolver: zodResolver(passwordSchema)
+    resolver: zodResolver(passwordSchema) as any
   });
 
   const newPasswordVal = watch('newPassword') || '';
@@ -114,26 +122,31 @@ export default function PasswordChangeModal({ onSuccess }: PasswordChangeModalPr
   const strength = getPasswordStrength(newPasswordVal);
 
   const onPasswordSubmit = async (values: PasswordFormValues) => {
-    if (values.oldPassword === values.newPassword) {
-      setError('New password must be different from current password.');
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
-      const isValid = await verifyCurrentPassword(values.oldPassword);
-      if (isValid) {
-        setNewPasswordInput(values.newPassword);
-        
-        // Generate simulated verification code
-        const code = generateVerificationCode();
-        setVerificationCode(code);
-        setInputCode(Array(6).fill(''));
-        
-        setStep('verify-code');
-      } else {
-        setError('Incorrect current password. Please check and try again.');
+      if (user?.has_password) {
+        if (values.oldPassword === values.newPassword) {
+          setError('New password must be different from current password.');
+          setLoading(false);
+          return;
+        }
+        const isValid = await verifyCurrentPassword(values.oldPassword || '');
+        if (!isValid) {
+          setError('Incorrect current password. Please check and try again.');
+          setLoading(false);
+          return;
+        }
       }
+      
+      setNewPasswordInput(values.newPassword);
+      
+      // Generate simulated verification code
+      const code = generateVerificationCode();
+      setVerificationCode(code);
+      setInputCode(Array(6).fill(''));
+      
+      setStep('verify-code');
     } catch (err) {
       console.error(err);
       setError('An error occurred while verifying details.');
@@ -197,7 +210,7 @@ export default function PasswordChangeModal({ onSuccess }: PasswordChangeModalPr
       <DialogHeader>
         <DialogTitle className="text-lg font-bold text-neutral-100 flex items-center gap-2">
           <Key className="h-5 w-5 text-indigo-400" />
-          <span>Change Password</span>
+          <span>{user?.has_password ? 'Change Password' : 'Set Password'}</span>
         </DialogTitle>
         <DialogDescription className="text-xs text-neutral-500">
           Ensure your account stays secure by choosing a strong password.
@@ -216,28 +229,30 @@ export default function PasswordChangeModal({ onSuccess }: PasswordChangeModalPr
         <form onSubmit={handleSubmit(onPasswordSubmit)} className="space-y-4 py-3 text-left">
           
           {/* Current Password */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-neutral-500">Current Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-550" />
-              <input
-                type={showOld ? "text" : "password"}
-                placeholder="Enter current password"
-                className="h-10.5 w-full pl-9 pr-10 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
-                {...register('oldPassword')}
-              />
-              <button
-                type="button"
-                onClick={() => setShowOld(!showOld)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
-              >
-                {showOld ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-              </button>
+          {user?.has_password && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-500">Current Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-550" />
+                <input
+                  type={showOld ? "text" : "password"}
+                  placeholder="Enter current password"
+                  className="h-10.5 w-full pl-9 pr-10 rounded-xl bg-neutral-950 border border-neutral-800 focus:border-indigo-500 focus:outline-none text-sm text-neutral-100 placeholder-neutral-500 transition-colors"
+                  {...register('oldPassword')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOld(!showOld)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-555 hover:text-neutral-300 transition-colors cursor-pointer flex items-center justify-center"
+                >
+                  {showOld ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                </button>
+              </div>
+              {errors.oldPassword && (
+                <p className="text-[11px] text-rose-500 mt-1">{errors.oldPassword.message}</p>
+              )}
             </div>
-            {errors.oldPassword && (
-              <p className="text-[11px] text-rose-500 mt-1">{errors.oldPassword.message}</p>
-            )}
-          </div>
+          )}
 
           {/* New Password */}
           <div className="space-y-1.5">
@@ -265,10 +280,10 @@ export default function PasswordChangeModal({ onSuccess }: PasswordChangeModalPr
                   <span className={`font-bold ${strength.colorClass}`}>{strength.label}</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1 h-1">
-                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 1 ? strength.barColorClass : 'bg-neutral-800'}`} />
-                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 2 ? strength.barColorClass : 'bg-neutral-800'}`} />
-                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 3 ? strength.barColorClass : 'bg-neutral-800'}`} />
-                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 4 ? strength.barColorClass : 'bg-neutral-800'}`} />
+                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 1 ? strength.barColorClass : 'bg-neutral-850'}`} />
+                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 2 ? strength.barColorClass : 'bg-neutral-850'}`} />
+                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 3 ? strength.barColorClass : 'bg-neutral-850'}`} />
+                  <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 4 ? strength.barColorClass : 'bg-neutral-850'}`} />
                 </div>
               </div>
             )}
@@ -334,7 +349,7 @@ export default function PasswordChangeModal({ onSuccess }: PasswordChangeModalPr
                 <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  <span>Update Password</span>
+                  <span>{user?.has_password ? 'Update Password' : 'Set Password'}</span>
                   <ChevronRight className="h-3.5 w-3.5" />
                 </>
               )}

@@ -46,6 +46,12 @@ function formatScheduleDate(date: Date): string {
 function isTransactionForLoan(tx: Transaction, loan: Loan): boolean {
   const desc = tx.description.toLowerCase();
   const name = loan.name.toLowerCase();
+  
+  // Exclude additional charges / late fees so they don't count as principal amortization payments
+  if (desc.includes('additional charge') || desc.includes('late fee') || desc.includes('processing')) {
+    return false;
+  }
+  
   if (desc.includes(name)) return true;
   if (desc.includes('loan payment:') && desc.includes(name)) return true;
   // Match specific mock transaction cases
@@ -68,46 +74,30 @@ function getScheduledDatesForMonth(year: number, month: number, loan: Loan): Dat
 }
 
 function getNextPaymentSchedule(loan: Loan, transactions: Transaction[], today: Date): { date: Date; isPastDue: boolean } {
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  
   // Parse the loan start date
   const loanStartDate = parseLocalDate(loan.start_date);
-  const loanStartMidnight = new Date(loanStartDate.getFullYear(), loanStartDate.getMonth(), loanStartDate.getDate());
-
-  // If today is before the loan start date, the first payment is not yet due
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  if (todayMidnight.getTime() < loanStartMidnight.getTime()) {
-    // Return the first scheduled payment date (on or after start date)
-    const firstDay = loan.first_payment_day || 1;
-    let firstPaymentDate = new Date(loanStartDate.getFullYear(), loanStartDate.getMonth(), firstDay);
-    // If the first payment day is before the start date's day, move to next month
-    if (firstPaymentDate.getTime() < loanStartMidnight.getTime()) {
-      firstPaymentDate = new Date(loanStartDate.getFullYear(), loanStartDate.getMonth() + 1, firstDay);
+  
+  const frequency = loan.payment_frequency || 'monthly';
+  const termMonths = loan.term_months || 12;
+  const firstDay = loan.first_payment_day || 1;
+  const secondDay = loan.second_payment_day || 15;
+  
+  // Generate all scheduled payment dates for the entire loan term
+  const allSchedules: Date[] = [];
+  for (let i = 0; i < termMonths; i++) {
+    const year = loanStartDate.getFullYear();
+    const month = loanStartDate.getMonth() + i;
+    
+    // Create first payment date for the month
+    allSchedules.push(new Date(year, month, firstDay));
+    
+    if (frequency === 'bi-monthly') {
+      allSchedules.push(new Date(year, month, secondDay));
     }
-    return {
-      date: firstPaymentDate,
-      isPastDue: false,
-    };
   }
-
-  // Generate candidate dates from 3 months ago to 6 months in the future
-  let allSchedules: Date[] = [];
-  for (let offset = -3; offset <= 6; offset++) {
-    const targetDate = new Date(currentYear, currentMonth + offset, 1);
-    const targetYear = targetDate.getFullYear();
-    const targetMonth = targetDate.getMonth();
-    allSchedules = allSchedules.concat(
-      getScheduledDatesForMonth(targetYear, targetMonth, loan)
-    );
-  }
-
-  // Filter out schedule dates that are before the loan start date
-  allSchedules = allSchedules.filter(d => {
-    const dMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return dMidnight.getTime() >= loanStartMidnight.getTime();
-  });
-
+  
   // Sort chronologically
   allSchedules.sort((a, b) => a.getTime() - b.getTime());
 
@@ -115,32 +105,11 @@ function getNextPaymentSchedule(loan: Loan, transactions: Transaction[], today: 
     return { date: new Date(), isPastDue: false };
   }
 
-  // Find S_0: the last scheduled date that is <= today
-  let s0Idx = 0;
-  for (let i = 0; i < allSchedules.length; i++) {
-    const sDate = new Date(allSchedules[i].getFullYear(), allSchedules[i].getMonth(), allSchedules[i].getDate());
-    if (sDate.getTime() <= todayMidnight.getTime()) {
-      s0Idx = i;
-    }
-  }
+  // Count total payments made for this loan (excluding fees)
+  const paymentCount = transactions.filter(tx => isTransactionForLoan(tx, loan)).length;
 
-  // S_{-1} is the scheduled date before S_0
-  const sMinus1 = s0Idx > 0 ? allSchedules[s0Idx - 1] : new Date(allSchedules[s0Idx].getTime() - 15 * 24 * 60 * 60 * 1000);
-
-  // Count transactions for this loan that occurred after S_{-1}
-  const sMinus1Midnight = new Date(sMinus1.getFullYear(), sMinus1.getMonth(), sMinus1.getDate());
-  const eligibleTxs = transactions.filter((tx) => {
-    if (!isTransactionForLoan(tx, loan)) return false;
-    const txDate = parseLocalDate(tx.date);
-    return txDate.getTime() > sMinus1Midnight.getTime();
-  });
-
-  const paymentCount = eligibleTxs.length;
-
-  // The next unpaid schedule is S_{paymentCount} starting from S_0
-  const targetIdx = s0Idx + paymentCount;
-  const nextScheduleDate = allSchedules[targetIdx] || allSchedules[allSchedules.length - 1];
-
+  // The next unpaid schedule is allSchedules[paymentCount] (default to last schedule if fully paid off)
+  const nextScheduleDate = allSchedules[paymentCount] || allSchedules[allSchedules.length - 1];
   const nextScheduleMidnight = new Date(nextScheduleDate.getFullYear(), nextScheduleDate.getMonth(), nextScheduleDate.getDate());
 
   return {
@@ -281,8 +250,13 @@ export default function LoansPage() {
         setLateChargeAmount('');
         setComment('');
         setIncludeLateCharge(false);
-        setPaymentError(null);
-        alert('Payment successfully credited to loan and logged in ledger!');
+        await confirm({
+          title: 'Payment Credited',
+          message: 'Payment successfully credited to loan and logged in ledger!',
+          confirmText: 'OK',
+          type: 'success',
+          isAlert: true
+        });
       } else {
         setPaymentError('Payment failed. Please try again.');
       }

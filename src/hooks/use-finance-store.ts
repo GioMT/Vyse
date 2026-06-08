@@ -511,11 +511,23 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
 
     updateUserPassword: async (newPassword) => {
       if (isDemoMode()) {
-        return MockDatabase.updatePassword(newPassword);
+        const success = MockDatabase.updatePassword(newPassword);
+        if (success) {
+          set({ user: MockDatabase.getSessionUser() });
+        }
+        return success;
       }
       if (supabase) {
-        const { error } = await supabase.auth.updateUser({ password: newPassword });
-        return !error;
+        const { error } = await supabase.auth.updateUser({ 
+          password: newPassword,
+          data: { has_password: true }
+        });
+        if (!error) {
+          const currentUser = await auth.getCurrentUser();
+          set({ user: currentUser });
+          return true;
+        }
+        return false;
       }
       return false;
     },
