@@ -462,14 +462,14 @@ export const db = {
 
   async createTransaction(txData: {
     accountId: string;
-    categoryId: string;
+    categoryId?: string;
     amount: number;
     type: 'income' | 'expense';
     description: string;
     date: string;
   }): Promise<Transaction | null> {
     if (isDemoMode()) {
-      return MockDatabase.createTransaction(txData);
+      return MockDatabase.createTransaction(txData as any);
     }
     if (!supabase) return null;
     const { data: { user } } = await supabase.auth.getUser();
@@ -484,7 +484,7 @@ export const db = {
       .insert({
         user_id: user.id,
         account_id: txData.accountId,
-        category_id: txData.categoryId,
+        category_id: txData.categoryId || null,
         amount: txData.amount,
         type: txData.type,
         description: txData.description,
@@ -498,27 +498,6 @@ export const db = {
       return null;
     }
 
-    // Manually update the account balance since there may be no database trigger
-    const balanceChange = txData.type === 'income' ? txData.amount : -txData.amount;
-    const { error: balanceError } = await supabase.rpc('increment_balance', {
-      account_id_input: txData.accountId,
-      amount_input: balanceChange
-    });
-    // Fallback: if the RPC doesn't exist, update directly
-    if (balanceError) {
-      const { data: currentAcc } = await supabase
-        .from('accounts')
-        .select('balance')
-        .eq('id', txData.accountId)
-        .single();
-      if (currentAcc) {
-        await supabase
-          .from('accounts')
-          .update({ balance: currentAcc.balance + balanceChange })
-          .eq('id', txData.accountId);
-      }
-    }
-
     return data;
   },
 
@@ -528,12 +507,6 @@ export const db = {
       return true;
     }
     if (!supabase) return false;
-    // First fetch the transaction to know its balance impact
-    const { data: txToDelete } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('id', txId)
-      .single();
 
     // Deleting a transaction triggers a postgres trigger to update the account balance
     const { error } = await supabase
@@ -546,24 +519,9 @@ export const db = {
       return false;
     }
 
-    // Manually reverse the balance impact
-    if (txToDelete) {
-      const balanceChange = txToDelete.type === 'income' ? -txToDelete.amount : txToDelete.amount;
-      const { data: currentAcc } = await supabase
-        .from('accounts')
-        .select('balance')
-        .eq('id', txToDelete.account_id)
-        .single();
-      if (currentAcc) {
-        await supabase
-          .from('accounts')
-          .update({ balance: currentAcc.balance + balanceChange })
-          .eq('id', txToDelete.account_id);
-      }
-    }
-
     return true;
   },
+
 
   // --- RECURRING BILLS ---
   async getBills(): Promise<RecurringBill[]> {
@@ -629,14 +587,16 @@ export const db = {
     // In production, we call an RPC or rely on database triggers.
     // For safety, we can insert the transaction, which updates the account balance,
     // and then update the next_due_date of the bill.
-    const bills = await this.getBills();
+    const bills = await db.getBills();
     const bill = bills.find(b => b.id === billId);
     if (!bill) return null;
 
-    const tx = await this.createTransaction({
+    const billAmount = typeof bill.amount === 'string' ? parseFloat(bill.amount) : bill.amount;
+
+    const tx = await db.createTransaction({
       accountId,
       categoryId: bill.category_id,
-      amount: bill.amount,
+      amount: billAmount,
       type: 'expense',
       description: `Payment: ${bill.name}`,
       date: new Date().toISOString().split('T')[0]
@@ -737,16 +697,36 @@ export const db = {
     }
     if (!supabase) return null;
 
-    const loans = await this.getLoans();
+    const loans = await db.getLoans();
     const loan = loans.find(l => l.id === loanId);
     if (!loan) return null;
 
-    const actualPayAmount = Math.min(amount, loan.remaining_balance);
+    const remainingBalance = typeof loan.remaining_balance === 'string' 
+      ? parseFloat(loan.remaining_balance) 
+      : loan.remaining_balance;
+    const paidAmount = typeof loan.paid_amount === 'string'
+      ? parseFloat(loan.paid_amount)
+      : loan.paid_amount;
+
+    const actualPayAmount = Math.min(amount, remainingBalance);
     if (actualPayAmount <= 0) return null;
 
-    const tx = await this.createTransaction({
+    // Dynamically resolve category IDs by name from the categories table for production/Supabase mode
+    const categories = await db.getCategories();
+    const utilitiesCat = categories.find(c => c.name === 'Utilities');
+    const otherExpenseCat = categories.find(c => c.name === 'Other Expense');
+    
+    const isDemo = isDemoMode();
+    const utilitiesCatId = utilitiesCat 
+      ? utilitiesCat.id 
+      : (isDemo ? 'cat-exp-utilities' : undefined);
+    const otherExpenseCatId = otherExpenseCat 
+      ? otherExpenseCat.id 
+      : (isDemo ? 'cat-exp-other' : undefined);
+
+    const tx = await db.createTransaction({
       accountId,
-      categoryId: 'cat-exp-utilities',
+      categoryId: utilitiesCatId,
       amount: actualPayAmount,
       type: 'expense',
       description: `Loan Payment: ${loan.name}`,
@@ -759,8 +739,8 @@ export const db = {
     const { error } = await supabase
       .from('loans')
       .update({
-        remaining_balance: parseFloat((loan.remaining_balance - actualPayAmount).toFixed(2)),
-        paid_amount: parseFloat((loan.paid_amount + actualPayAmount).toFixed(2))
+        remaining_balance: parseFloat((remainingBalance - actualPayAmount).toFixed(2)),
+        paid_amount: parseFloat((paidAmount + actualPayAmount).toFixed(2))
       })
       .eq('id', loanId);
 
@@ -770,9 +750,9 @@ export const db = {
 
     // Create separate transaction for late charges if applicable
     if (lateCharge && lateCharge > 0) {
-      await this.createTransaction({
+      await db.createTransaction({
         accountId,
-        categoryId: 'cat-exp-other',
+        categoryId: otherExpenseCatId,
         amount: lateCharge,
         type: 'expense',
         description: `Loan Additional Charge (${comment || 'Late Fee/Processing'}): ${loan.name}`,

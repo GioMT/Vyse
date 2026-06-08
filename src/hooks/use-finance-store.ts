@@ -334,10 +334,21 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
         const sourceDesc = `${data.description || 'Transfer'} to ${toAccName} [Fee: ${additionalCharge.toFixed(2)}] (Ref: ${refId})`;
         const destDesc = `${data.description || 'Transfer'} from ${fromAccName} (Ref: ${refId})`;
         
+        // Dynamically resolve other expense and income categories for production/Supabase mode
+        const otherExpenseCat = state.categories.find(c => c.name === 'Other Expense');
+        const otherIncomeCat = state.categories.find(c => c.name === 'Other Income');
+        const isDemo = isDemoMode();
+        const otherExpenseCatId = otherExpenseCat 
+          ? otherExpenseCat.id 
+          : (isDemo ? 'cat-exp-other' : undefined);
+        const otherIncomeCatId = otherIncomeCat 
+          ? otherIncomeCat.id 
+          : (isDemo ? 'cat-inc-other' : undefined);
+        
         // 1. Create source account expense (amount + fee)
         const sourceTx = await db.createTransaction({
           accountId: data.accountId,
-          categoryId: 'cat-exp-other', // Default to Other Expense for transfers
+          categoryId: otherExpenseCatId,
           amount: data.amount + additionalCharge,
           type: 'expense',
           description: sourceDesc,
@@ -349,7 +360,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
         // 2. Create destination account income (base amount)
         const destTx = await db.createTransaction({
           accountId: data.toAccountId || '',
-          categoryId: 'cat-inc-other', // Default to Other Income for transfers
+          categoryId: otherIncomeCatId,
           amount: data.amount,
           type: 'income',
           description: destDesc,
@@ -603,9 +614,20 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
 
     autoCategorizeAll: async () => {
       const state = get();
+      const otherExpenseCat = state.categories.find(c => c.name === 'Other Expense');
+      const otherIncomeCat = state.categories.find(c => c.name === 'Other Income');
+      const isDemo = isDemoMode();
+      const otherExpenseCatId = otherExpenseCat 
+        ? otherExpenseCat.id 
+        : (isDemo ? 'cat-exp-other' : undefined);
+      const otherIncomeCatId = otherIncomeCat 
+        ? otherIncomeCat.id 
+        : (isDemo ? 'cat-inc-other' : undefined);
+
       // Target transactions with "Other Expense" or "Other Income"
       const targetTxs = state.transactions.filter(
-        t => t.category_id === 'cat-exp-other' || t.category_id === 'cat-inc-other'
+        t => (otherExpenseCatId && t.category_id === otherExpenseCatId) || 
+             (otherIncomeCatId && t.category_id === otherIncomeCatId)
       );
       
       if (targetTxs.length === 0) return;
