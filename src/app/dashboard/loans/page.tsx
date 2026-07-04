@@ -449,7 +449,7 @@ export default function LoansPage() {
                 >
                   <option value="">Select a loan...</option>
                   {loans.map(l => (
-                    <option key={l.id} value={l.id}>{l.name} (${l.remaining_balance.toFixed(2)})</option>
+                    <option key={l.id} value={l.id}>{l.name} ({formatCurrency(l.remaining_balance)})</option>
                   ))}
                 </select>
               </div>

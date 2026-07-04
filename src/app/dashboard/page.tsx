@@ -7,7 +7,7 @@ import Charts from '@/components/dashboard/charts';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import TransactionForm from '@/components/dashboard/transaction-form';
 // import AccountForm from '@/components/dashboard/account-form';
-import { parseDescription } from '@/lib/format';
+import { parseDescription, formatCurrency } from '@/lib/format';
 import { CATEGORY_COLOR_CLASSES } from '@/lib/constants';
 import { useConfirm } from '@/components/ui/confirmation-provider';
 import { 
@@ -214,11 +214,11 @@ export default function DashboardHome() {
                         <td className="py-3.5 text-neutral-400 hidden md:table-cell">{acc ? acc.name : 'Unknown Account'}</td>
                         <td className="py-3.5 text-right">
                           <div className={`font-extrabold ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {tx.type === 'income' ? '+' : '-'}${baseAmount.toFixed(2)}
+                            {tx.type === 'income' ? '+' : '-'}{formatCurrency(baseAmount)}
                           </div>
                           {fee > 0 && (
-                            <div className="text-[10px] text-neutral-500 font-medium">
-                              + ${fee.toFixed(2)} charge
+                            <div className="text-[10px] text-neutral-550 font-medium">
+                              + {formatCurrency(fee)} charge
                             </div>
                           )}
                         </td>

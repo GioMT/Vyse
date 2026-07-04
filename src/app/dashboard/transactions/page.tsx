@@ -16,7 +16,7 @@ import {
   Sparkles,
   Wand2
 } from 'lucide-react';
-import { parseDescription } from '@/lib/format';
+import { parseDescription, formatCurrency } from '@/lib/format';
 import { useConfirm } from '@/components/ui/confirmation-provider';
 
 export default function TransactionsPage() {
@@ -289,11 +289,11 @@ export default function TransactionsPage() {
                         <div className={`text-sm font-extrabold ${
                           tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
-                          {tx.type === 'income' ? '+' : '-'}${baseAmount.toFixed(2)}
+                          {tx.type === 'income' ? '+' : '-'}{formatCurrency(baseAmount)}
                         </div>
                         {fee > 0 && (
-                          <div className="text-[10px] text-neutral-500 font-medium">
-                            + ${fee.toFixed(2)} charge
+                          <div className="text-[10px] text-neutral-550 font-medium">
+                            + {formatCurrency(fee)} charge
                           </div>
                         )}
                       </td>

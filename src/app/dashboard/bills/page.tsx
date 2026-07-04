@@ -269,7 +269,7 @@ export default function BillsPage() {
                           className="h-8 w-full px-2 rounded bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-100 focus:outline-none"
                         >
                           {accounts.map(a => (
-                            <option key={a.id} value={a.id}>{a.name} (${a.balance.toFixed(2)})</option>
+                            <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>
                           ))}
                         </select>
                         

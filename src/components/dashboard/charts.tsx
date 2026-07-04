@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Transaction, Category } from '@/lib/db-mock';
 import { CATEGORY_HEX_COLORS } from '@/lib/constants';
+import { formatCurrency, getCurrencySymbol } from '@/lib/format';
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -41,10 +42,10 @@ const CustomBarTooltip = ({ active, payload }: CustomTooltipProps) => {
       <div className="bg-popover border border-neutral-850 p-3 rounded-xl shadow-2xl z-50">
         <p className="text-xs font-semibold text-neutral-500 mb-1">{payload[0].payload.label}</p>
         <p className="text-sm font-semibold text-emerald-600">
-          Inflow: ${payload[0].value.toLocaleString()}
+          Inflow: {formatCurrency(payload[0].value)}
         </p>
         <p className="text-sm font-semibold text-rose-600">
-          Outflow: ${payload[1].value.toLocaleString()}
+          Outflow: {formatCurrency(payload[1].value)}
         </p>
       </div>
     );
@@ -58,7 +59,7 @@ const CustomDonutTooltip = ({ active, payload }: CustomTooltipProps) => {
       <div className="bg-popover border border-neutral-850 p-3 rounded-xl shadow-2xl z-50">
         <p className="text-xs font-semibold text-neutral-100 mb-0.5">{payload[0].name}</p>
         <p className="text-sm font-extrabold" style={{ color: payload[0].payload.color }}>
-          ${payload[0].value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          {formatCurrency(payload[0].value)}
         </p>
       </div>
     );
@@ -194,7 +195,7 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
                   fontSize={10} 
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(val) => `$${val}`}
+                  tickFormatter={(val) => `${getCurrencySymbol()}${val.toLocaleString()}`}
                 />
                 <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'var(--color-neutral-850)', opacity: 0.3 }} wrapperStyle={{ zIndex: 50 }} />
                 <Legend 
@@ -253,7 +254,7 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-[9px] uppercase tracking-wider font-semibold text-neutral-500">Inflow</span>
                     <span className="text-sm md:text-base font-extrabold text-neutral-100 mt-0.5">
-                      ${inflowDonutData.reduce((sum, item) => sum + item.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      {getCurrencySymbol()}{inflowDonutData.reduce((sum, item) => sum + item.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                   </div>
                 </div>
@@ -317,7 +318,7 @@ export default function Charts({ filteredTransactions, categories }: ChartsProps
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <span className="text-[9px] uppercase tracking-wider font-semibold text-neutral-500">Outflow</span>
                     <span className="text-sm md:text-base font-extrabold text-neutral-100 mt-0.5">
-                      ${outflowDonutData.reduce((sum, item) => sum + item.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      {getCurrencySymbol()}{outflowDonutData.reduce((sum, item) => sum + item.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                   </div>
                 </div>
